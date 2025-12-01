@@ -10,7 +10,7 @@ interface TimerDisplayProps {
 const phaseColors: Record<Phase, string> = {
   immersion: 'text-ocean-light',
   dive: 'text-primary',
-  breath: 'text-coral',
+  breath: '', // Special styling for breath
 };
 
 export function TimerDisplay({ minutes, seconds, phase }: TimerDisplayProps) {
@@ -20,8 +20,8 @@ export function TimerDisplay({ minutes, seconds, phase }: TimerDisplayProps) {
     <div className="relative water-reflection">
       <div 
         className={cn(
-          "text-7xl sm:text-8xl font-light tracking-tight timer-text transition-colors duration-500",
-          phaseColors[phase]
+          "text-7xl sm:text-8xl font-light tracking-tight transition-colors duration-500",
+          phase === 'breath' ? 'timer-text-breath' : cn('timer-text', phaseColors[phase])
         )}
       >
         {timeStr}

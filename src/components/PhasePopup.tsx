@@ -1,5 +1,4 @@
 import { Phase } from "@/lib/storage";
-import { cn } from "@/lib/utils";
 
 interface PhasePopupProps {
   isOpen: boolean;
@@ -24,16 +23,16 @@ export function PhasePopup({ isOpen, nextPhase, onContinue, onWait }: PhasePopup
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div 
-        className={cn(
-          "glass rounded-3xl p-8 max-w-sm w-full text-center animate-slide-up",
-          "border border-white/20"
-        )}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in">
+      <div className="glass-popup p-8 max-w-sm w-full text-center animate-slide-up">
         {/* Wave decoration */}
         <div className="mb-6 flex justify-center">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-ocean-light to-ocean-medium flex items-center justify-center animate-float">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center animate-float"
+            style={{
+              background: 'linear-gradient(135deg, hsl(195, 85%, 65%) 0%, hsl(205, 75%, 45%) 100%)',
+              boxShadow: '0 8px 24px hsla(200, 80%, 55%, 0.4), inset 0 1px 0 hsla(0, 0%, 100%, 0.3)'
+            }}
+          >
             <svg 
               viewBox="0 0 24 24" 
               className="w-8 h-8 text-white"
@@ -52,7 +51,15 @@ export function PhasePopup({ isOpen, nextPhase, onContinue, onWait }: PhasePopup
         </h2>
         
         <div className="mb-6">
-          <span className="inline-block px-4 py-2 rounded-full bg-primary/20 text-primary font-medium text-lg">
+          <span 
+            className="inline-block px-5 py-2.5 rounded-full font-medium text-lg"
+            style={{
+              background: 'linear-gradient(135deg, hsla(200, 80%, 55%, 0.25) 0%, hsla(200, 80%, 45%, 0.15) 100%)',
+              border: '1px solid hsla(200, 80%, 55%, 0.3)',
+              color: 'hsl(200, 80%, 65%)',
+              boxShadow: '0 0 20px hsla(200, 80%, 55%, 0.15)'
+            }}
+          >
             {phaseNames[nextPhase]}
           </span>
           <p className="text-muted-foreground mt-3 text-sm">
@@ -63,13 +70,13 @@ export function PhasePopup({ isOpen, nextPhase, onContinue, onWait }: PhasePopup
         <div className="flex gap-3">
           <button
             onClick={onWait}
-            className="flex-1 py-3 px-4 rounded-xl glass-button text-foreground font-medium"
+            className="flex-1 ios-button-secondary"
           >
             Aguarde
           </button>
           <button
             onClick={onContinue}
-            className="flex-1 py-3 px-4 rounded-xl bg-primary text-primary-foreground font-medium transition-all hover:brightness-110 hover:shadow-lg hover:shadow-primary/30"
+            className="flex-1 ios-button-primary"
           >
             Sim, continuar
           </button>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Settings } from "lucide-react";
+import { Settings, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Phase, getSettings, saveCycleRecord, generateId } from "@/lib/storage";
@@ -20,7 +20,7 @@ const phaseNames: Record<Phase, string> = {
 const phaseColors: Record<Phase, string> = {
   immersion: 'hsl(195, 85%, 65%)',
   dive: 'hsl(200, 80%, 55%)',
-  breath: 'hsl(25, 90%, 60%)',
+  breath: 'hsl(25, 90%, 40%)',
 };
 
 export function PomodoroTimer() {
@@ -140,9 +140,9 @@ export function PomodoroTimer() {
   // Background classes based on phase
   const bgClass = cn(
     "min-h-screen transition-all duration-1000 ease-in-out",
-    currentPhase === 'immersion' && "bg-immersion",
+    currentPhase === 'immersion' && "bg-immersion water-caustics",
     currentPhase === 'dive' && "bg-dive",
-    currentPhase === 'breath' && "bg-breath"
+    currentPhase === 'breath' && "bg-breath water-caustics"
   );
 
   // Dynamic background darkness for immersion
@@ -151,20 +151,31 @@ export function PomodoroTimer() {
   return (
     <div className={bgClass}>
       {/* Darkness overlay for immersion phase */}
-      <div 
-        className="fixed inset-0 bg-black pointer-events-none transition-opacity duration-500"
-        style={{ opacity: overlayOpacity }}
-      />
+      {currentPhase === 'immersion' && (
+        <div 
+          className="fixed inset-0 bg-black pointer-events-none transition-opacity duration-500 z-0"
+          style={{ opacity: overlayOpacity }}
+        />
+      )}
 
-      <div className="relative min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
-        {/* Settings button */}
-        <Link
-          to="/settings"
-          className="absolute top-6 right-6 w-12 h-12 rounded-full glass-button flex items-center justify-center"
-          aria-label="Configurações"
-        >
-          <Settings className="w-5 h-5 text-foreground" />
-        </Link>
+      <div className="relative min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 z-10">
+        {/* Top bar buttons */}
+        <div className="absolute top-6 right-6 flex gap-3">
+          <Link
+            to="/dashboard"
+            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
+            aria-label="Dashboard"
+          >
+            <BarChart3 className="w-5 h-5 text-foreground" />
+          </Link>
+          <Link
+            to="/settings"
+            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
+            aria-label="Configurações"
+          >
+            <Settings className="w-5 h-5 text-foreground" />
+          </Link>
+        </div>
 
         {/* Cycle counter */}
         <div className="absolute top-6 left-6 glass px-4 py-2 rounded-full">
@@ -174,7 +185,10 @@ export function PomodoroTimer() {
 
         {/* Phase indicator */}
         <div className="mb-8 animate-slide-up">
-          <span className="text-lg font-medium text-foreground/80 tracking-wide uppercase">
+          <span className={cn(
+            "text-lg font-medium tracking-wide uppercase",
+            currentPhase === 'breath' ? 'text-foreground/90' : 'text-foreground/80'
+          )}>
             {phaseNames[currentPhase]}
           </span>
         </div>
@@ -214,9 +228,9 @@ export function PomodoroTimer() {
             />
           )}
           {currentPhase === 'breath' && (
-            <div className="text-center text-foreground/60 py-4">
-              <span className="text-2xl">🌊</span>
-              <p className="mt-2">Momento de descanso</p>
+            <div className="text-center py-4">
+              <span className="text-3xl">🌊</span>
+              <p className="mt-2 text-foreground/80 font-medium">Momento de descanso</p>
             </div>
           )}
         </div>
