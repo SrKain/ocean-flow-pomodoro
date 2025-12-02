@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Settings, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Phase, getSettings, saveCycleRecord, generateId } from "@/lib/storage";
+import { Phase, getSettingsAsync, saveCycleRecordAsync, PomodoroSettings } from "@/lib/database";
 import { PolarRing } from "./PolarRing";
 import { TimerDisplay } from "./TimerDisplay";
 import { ControlButtons } from "./ControlButtons";
 import { TagInput } from "./TagInput";
 import { PhasePopup } from "./PhasePopup";
+import { useWakeLock } from "@/hooks/useWakeLock";
 
 const phaseOrder: Phase[] = ['immersion', 'dive', 'breath'];
 
@@ -24,11 +25,10 @@ const phaseColors: Record<Phase, string> = {
 };
 
 export function PomodoroTimer() {
-  const settings = getSettings();
-  
+  const [settings, setSettings] = useState<PomodoroSettings | null>(null);
   const [currentPhase, setCurrentPhase] = useState<Phase>('immersion');
-  const [timeLeft, setTimeLeft] = useState(settings.immersionMinutes * 60);
-  const [totalTime, setTotalTime] = useState(settings.immersionMinutes * 60);
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
+  const [totalTime, setTotalTime] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [tag, setTag] = useState('');
@@ -38,14 +38,26 @@ export function PomodoroTimer() {
   const startTimeRef = useRef<string | null>(null);
   const pendingPhaseRef = useRef<Phase | null>(null);
 
-  const getPhaseTime = useCallback((phase: Phase) => {
-    const s = getSettings();
-    switch (phase) {
-      case 'immersion': return s.immersionMinutes * 60;
-      case 'dive': return s.diveMinutes * 60;
-      case 'breath': return s.breathMinutes * 60;
-    }
+  // Keep screen on while timer is running
+  useWakeLock(isRunning);
+
+  // Load settings on mount
+  useEffect(() => {
+    getSettingsAsync().then((s) => {
+      setSettings(s);
+      setTimeLeft(s.immersionMinutes * 60);
+      setTotalTime(s.immersionMinutes * 60);
+    });
   }, []);
+
+  const getPhaseTime = useCallback((phase: Phase) => {
+    if (!settings) return 25 * 60;
+    switch (phase) {
+      case 'immersion': return settings.immersionMinutes * 60;
+      case 'dive': return settings.diveMinutes * 60;
+      case 'breath': return settings.breathMinutes * 60;
+    }
+  }, [settings]);
 
   const getNextPhase = (current: Phase): Phase => {
     const currentIndex = phaseOrder.indexOf(current);
@@ -54,8 +66,7 @@ export function PomodoroTimer() {
 
   const saveCycle = useCallback((completed: boolean) => {
     if (startTimeRef.current) {
-      saveCycleRecord({
-        id: generateId(),
+      saveCycleRecordAsync({
         phase: currentPhase,
         startTime: startTimeRef.current,
         endTime: new Date().toISOString(),
@@ -87,6 +98,7 @@ export function PomodoroTimer() {
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
     setShowPopup(true);
+    // Phase does NOT auto-start - waits for user confirmation
   }, [currentPhase, saveCycle]);
 
   const handleSkip = useCallback(() => {
@@ -137,27 +149,53 @@ export function PomodoroTimer() {
   const seconds = timeLeft % 60;
   const progress = 1 - (timeLeft / totalTime);
 
-  // Background classes based on phase
-  const bgClass = cn(
-    "min-h-screen transition-all duration-1000 ease-in-out",
-    currentPhase === 'immersion' && "bg-immersion water-caustics",
-    currentPhase === 'dive' && "bg-dive",
-    currentPhase === 'breath' && "bg-breath water-caustics"
-  );
+  // Calculate background style based on phase and progress
+  const getBackgroundStyle = () => {
+    if (currentPhase === 'dive') {
+      // Pure black for OLED
+      return { background: '#000000' };
+    }
+    
+    if (currentPhase === 'immersion') {
+      // Light blue that darkens over time
+      const lightness = 60 - (progress * 35); // From 60% to 25%
+      return {
+        background: `linear-gradient(180deg, hsl(195, 85%, ${lightness}%) 0%, hsl(215, 65%, ${lightness - 15}%) 100%)`
+      };
+    }
+    
+    if (currentPhase === 'breath') {
+      // Dark → Light → Dark cycle
+      // 0-50%: dark to light, 50-100%: light to dark
+      let lightness;
+      if (progress <= 0.5) {
+        // Going from dark (35%) to light (65%)
+        lightness = 35 + (progress * 2 * 30);
+      } else {
+        // Going from light (65%) back to dark (35%)
+        lightness = 65 - ((progress - 0.5) * 2 * 30);
+      }
+      return {
+        background: `linear-gradient(180deg, hsl(30, 80%, ${lightness}%) 0%, hsl(25, 70%, ${lightness - 10}%) 100%)`
+      };
+    }
+    
+    return {};
+  };
 
-  // Dynamic background darkness for immersion
-  const overlayOpacity = currentPhase === 'immersion' ? progress * 0.4 : 0;
+  if (!settings) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-foreground">Carregando...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className={bgClass}>
-      {/* Darkness overlay for immersion phase */}
-      {currentPhase === 'immersion' && (
-        <div 
-          className="fixed inset-0 bg-black pointer-events-none transition-opacity duration-500 z-0"
-          style={{ opacity: overlayOpacity }}
-        />
-      )}
-
+    <div 
+      className="min-h-screen transition-all duration-1000 ease-in-out"
+      style={getBackgroundStyle()}
+    >
       <div className="relative min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 z-10">
         {/* Top bar buttons */}
         <div className="absolute top-6 right-6 flex gap-3">

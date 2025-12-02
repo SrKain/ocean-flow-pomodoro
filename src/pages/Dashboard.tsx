@@ -1,6 +1,13 @@
+import { useState, useEffect } from "react";
 import { ArrowLeft, Clock, Target, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getTagStats, getRecentCycles, getState, CycleRecord } from "@/lib/storage";
+import { 
+  getTagStatsAsync, 
+  getRecentCyclesAsync, 
+  getTotalCompletedCyclesAsync,
+  CycleRecord,
+  TagStats 
+} from "@/lib/database";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -62,14 +69,36 @@ function CycleItem({ cycle }: { cycle: CycleRecord }) {
 }
 
 export default function Dashboard() {
-  const tagStats = getTagStats();
-  const recentCycles = getRecentCycles(15);
-  const state = getState();
-  const totalCycles = state.totalCompletedCycles;
-  const totalMinutes = tagStats.reduce((acc, t) => acc + t.totalTimeMinutes, 0);
+  const [tagStats, setTagStats] = useState<TagStats[]>([]);
+  const [recentCycles, setRecentCycles] = useState<CycleRecord[]>([]);
+  const [totalCycles, setTotalCycles] = useState(0);
+  const [totalMinutes, setTotalMinutes] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      getTagStatsAsync(),
+      getRecentCyclesAsync(15),
+      getTotalCompletedCyclesAsync()
+    ]).then(([stats, cycles, total]) => {
+      setTagStats(stats);
+      setRecentCycles(cycles);
+      setTotalCycles(total);
+      setTotalMinutes(stats.reduce((acc, t) => acc + t.totalTimeMinutes, 0));
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-foreground">Carregando...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background water-caustics">
+    <div className="min-h-screen bg-background">
       <div className="relative min-h-screen p-4 sm:p-8 z-10">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">

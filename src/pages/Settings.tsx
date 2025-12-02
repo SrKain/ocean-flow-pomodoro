@@ -1,18 +1,35 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Save } from "lucide-react";
-import { getSettings, saveSettings, PomodoroSettings } from "@/lib/storage";
+import { getSettingsAsync, saveSettingsAsync, PomodoroSettings } from "@/lib/database";
 import { toast } from "sonner";
 
 export default function Settings() {
   const navigate = useNavigate();
-  const [settings, setSettings] = useState<PomodoroSettings>(getSettings());
+  const [settings, setSettings] = useState<PomodoroSettings | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = () => {
-    saveSettings(settings);
+  useEffect(() => {
+    getSettingsAsync().then((s) => {
+      setSettings(s);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleSave = async () => {
+    if (!settings) return;
+    await saveSettingsAsync(settings);
     toast.success("Configurações salvas!");
     navigate("/");
   };
+
+  if (loading || !settings) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-foreground">Carregando...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,10 +61,10 @@ export default function Settings() {
                   min="1"
                   max="120"
                   value={settings.immersionMinutes}
-                  onChange={(e) => setSettings(prev => ({
+                  onChange={(e) => setSettings(prev => prev ? ({
                     ...prev,
                     immersionMinutes: parseInt(e.target.value) || 25
-                  }))}
+                  }) : prev)}
                   className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
                 />
                 <span className="text-muted-foreground">minutos</span>
@@ -68,10 +85,10 @@ export default function Settings() {
                   min="1"
                   max="60"
                   value={settings.diveMinutes}
-                  onChange={(e) => setSettings(prev => ({
+                  onChange={(e) => setSettings(prev => prev ? ({
                     ...prev,
                     diveMinutes: parseInt(e.target.value) || 5
-                  }))}
+                  }) : prev)}
                   className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
                 />
                 <span className="text-muted-foreground">minutos</span>
@@ -92,10 +109,10 @@ export default function Settings() {
                   min="1"
                   max="60"
                   value={settings.breathMinutes}
-                  onChange={(e) => setSettings(prev => ({
+                  onChange={(e) => setSettings(prev => prev ? ({
                     ...prev,
                     breathMinutes: parseInt(e.target.value) || 5
-                  }))}
+                  }) : prev)}
                   className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
                 />
                 <span className="text-muted-foreground">minutos</span>
