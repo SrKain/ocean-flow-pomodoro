@@ -184,42 +184,7 @@
     border-color: hsla(0, 0%, 100%, 0.18);
   }
 
-  /* Water reflection effect - realistic shallow water */
-  .water-reflection {
-    position: relative;
-    overflow: visible;
-  }
-
-  .water-reflection::before {
-    content: '';
-    position: absolute;
-    inset: -20%;
-    background: 
-      radial-gradient(ellipse 100% 50% at 50% 0%, hsla(195, 100%, 80%, 0.15) 0%, transparent 60%),
-      radial-gradient(ellipse 80% 40% at 30% 20%, hsla(195, 100%, 75%, 0.1) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 30% at 70% 80%, hsla(195, 100%, 85%, 0.08) 0%, transparent 40%);
-    animation: water-caustics 4s ease-in-out infinite;
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .water-reflection::after {
-    content: '';
-    position: absolute;
-    inset: -10%;
-    background: 
-      repeating-linear-gradient(
-        90deg,
-        transparent 0%,
-        hsla(195, 100%, 80%, 0.03) 2%,
-        transparent 4%
-      );
-    animation: water-ripple 3s linear infinite;
-    pointer-events: none;
-    z-index: 2;
-  }
-
-  /* Timer text with water glow */
+  /* Timer text with glow */
   .timer-text {
     position: relative;
     text-shadow: 
@@ -243,32 +208,9 @@
     filter: drop-shadow(0 0 12px hsla(var(--primary), 0.6));
   }
 
-  /* Water caustics overlay for backgrounds */
-  .water-caustics {
-    position: relative;
-  }
-
-  .water-caustics::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: 
-      radial-gradient(ellipse 40% 30% at 20% 30%, hsla(195, 100%, 80%, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse 50% 40% at 80% 60%, hsla(195, 100%, 75%, 0.06) 0%, transparent 50%),
-      radial-gradient(ellipse 30% 25% at 60% 20%, hsla(195, 100%, 85%, 0.07) 0%, transparent 40%),
-      radial-gradient(ellipse 45% 35% at 40% 80%, hsla(195, 100%, 80%, 0.05) 0%, transparent 45%);
-    animation: caustics-move 8s ease-in-out infinite;
-    pointer-events: none;
-    z-index: 1;
-  }
-
   /* Pure black for OLED - dive phase */
   .bg-dive-oled {
     background: #000000 !important;
-  }
-
-  .bg-dive-oled::before {
-    display: none !important;
   }
 
   /* Glass card for dashboard */
@@ -310,63 +252,6 @@
 }
 
 /* Animations */
-@keyframes water-caustics {
-  0%, 100% {
-    transform: scale(1) rotate(0deg);
-    opacity: 0.6;
-  }
-  25% {
-    transform: scale(1.05) rotate(1deg);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.02) rotate(-1deg);
-    opacity: 0.7;
-  }
-  75% {
-    transform: scale(1.08) rotate(0.5deg);
-    opacity: 0.9;
-  }
-}
-
-@keyframes water-ripple {
-  0% {
-    transform: translateX(-10%) skewX(-2deg);
-  }
-  50% {
-    transform: translateX(5%) skewX(2deg);
-  }
-  100% {
-    transform: translateX(-10%) skewX(-2deg);
-  }
-}
-
-@keyframes caustics-move {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  25% {
-    transform: translate(2%, 3%) scale(1.02);
-  }
-  50% {
-    transform: translate(-1%, 2%) scale(0.98);
-  }
-  75% {
-    transform: translate(1%, -2%) scale(1.01);
-  }
-}
-
-@keyframes water-shimmer {
-  0%, 100% {
-    transform: translateY(-5%) scaleY(1);
-    opacity: 0.5;
-  }
-  50% {
-    transform: translateY(5%) scaleY(1.1);
-    opacity: 0.8;
-  }
-}
-
 @keyframes pulse-glow {
   0%, 100% {
     filter: drop-shadow(0 0 8px hsla(var(--primary), 0.5));
@@ -396,10 +281,6 @@
     transform: scale(1.5);
     opacity: 0;
   }
-}
-
-.animate-water-shimmer {
-  animation: water-shimmer 3s ease-in-out infinite;
 }
 
 .animate-pulse-glow {
