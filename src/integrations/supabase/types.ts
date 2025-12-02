@@ -14,7 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cycle_records: {
+        Row: {
+          actions: string | null
+          completed: boolean
+          created_at: string
+          end_time: string
+          id: string
+          phase: string
+          start_time: string
+          tag: string | null
+        }
+        Insert: {
+          actions?: string | null
+          completed?: boolean
+          created_at?: string
+          end_time: string
+          id?: string
+          phase: string
+          start_time: string
+          tag?: string | null
+        }
+        Update: {
+          actions?: string | null
+          completed?: boolean
+          created_at?: string
+          end_time?: string
+          id?: string
+          phase?: string
+          start_time?: string
+          tag?: string | null
+        }
+        Relationships: []
+      }
+      pomodoro_settings: {
+        Row: {
+          breath_minutes: number
+          created_at: string
+          dive_minutes: number
+          id: string
+          immersion_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          breath_minutes?: number
+          created_at?: string
+          dive_minutes?: number
+          id?: string
+          immersion_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          breath_minutes?: number
+          created_at?: string
+          dive_minutes?: number
+          id?: string
+          immersion_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
