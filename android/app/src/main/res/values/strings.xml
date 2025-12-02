@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OceanPomodoro</string>
+    <string name="title_activity_main">OceanPomodoro</string>
+    <string name="package_name">app.lovable.d842d11c388d4c88b347fe90382d060b</string>
+    <string name="custom_url_scheme">app.lovable.d842d11c388d4c88b347fe90382d060b</string>
+</resources>
