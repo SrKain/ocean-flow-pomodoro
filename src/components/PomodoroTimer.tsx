@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Settings, BarChart3 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Settings, BarChart3, LogOut, CheckCircle } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Phase, getSettingsAsync, saveCycleRecordAsync, PomodoroSettings } from "@/lib/database";
 import { PolarRing } from "./PolarRing";
 import { TimerDisplay } from "./TimerDisplay";
 import { ControlButtons } from "./ControlButtons";
+import { TagSelector, Tag } from "./TagSelector";
 import { TagInput } from "./TagInput";
 import { PhasePopup } from "./PhasePopup";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { useAuth } from "@/hooks/useAuth";
 
 const phaseOrder: Phase[] = ['immersion', 'dive', 'breath'];
 
@@ -31,12 +33,15 @@ export function PomodoroTimer() {
   const [totalTime, setTotalTime] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
-  const [tag, setTag] = useState('');
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [actions, setActions] = useState('');
   const [cycleCount, setCycleCount] = useState(0);
   
   const startTimeRef = useRef<string | null>(null);
   const pendingPhaseRef = useRef<Phase | null>(null);
+  
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   // Keep screen on while timer is running
   useWakeLock(isRunning);
@@ -66,16 +71,17 @@ export function PomodoroTimer() {
 
   const saveCycle = useCallback((completed: boolean) => {
     if (startTimeRef.current) {
+      const tagNames = selectedTags.map(t => t.name).join(', ');
       saveCycleRecordAsync({
         phase: currentPhase,
         startTime: startTimeRef.current,
         endTime: new Date().toISOString(),
-        tag: currentPhase === 'immersion' ? tag : undefined,
+        tag: currentPhase === 'immersion' ? tagNames : undefined,
         actions: currentPhase === 'dive' ? actions : undefined,
         completed,
       });
     }
-  }, [currentPhase, tag, actions]);
+  }, [currentPhase, selectedTags, actions]);
 
   const startPhase = useCallback((phase: Phase) => {
     const time = getPhaseTime(phase);
@@ -98,12 +104,21 @@ export function PomodoroTimer() {
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
     setShowPopup(true);
-    // Phase does NOT auto-start - waits for user confirmation
   }, [currentPhase, saveCycle]);
 
   const handleSkip = useCallback(() => {
     setIsRunning(false);
     saveCycle(false);
+    
+    const next = getNextPhase(currentPhase);
+    pendingPhaseRef.current = next;
+    setShowPopup(true);
+  }, [currentPhase, saveCycle]);
+
+  // Complete cycle button - finishes current phase and shows popup
+  const handleCompleteCycle = useCallback(() => {
+    setIsRunning(false);
+    saveCycle(true);
     
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
@@ -126,6 +141,11 @@ export function PomodoroTimer() {
 
   const handleWait = () => {
     setShowPopup(false);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
   };
 
   // Timer countdown
@@ -152,7 +172,15 @@ export function PomodoroTimer() {
   // Calculate background style based on phase and progress
   const getBackgroundStyle = () => {
     if (currentPhase === 'dive') {
-      // Pure black for OLED
+      // Pure black for OLED, but lighten in the last 25%
+      if (progress >= 0.75) {
+        // Last 25%: gradually lighten from black to dark blue
+        const lightenProgress = (progress - 0.75) / 0.25; // 0 to 1 in last quarter
+        const lightness = lightenProgress * 15; // 0% to 15%
+        return {
+          background: `linear-gradient(180deg, hsl(210, 50%, ${lightness}%) 0%, hsl(215, 60%, ${lightness * 0.7}%) 100%)`
+        };
+      }
       return { background: '#000000' };
     }
     
@@ -166,13 +194,10 @@ export function PomodoroTimer() {
     
     if (currentPhase === 'breath') {
       // Dark → Light → Dark cycle
-      // 0-50%: dark to light, 50-100%: light to dark
       let lightness;
       if (progress <= 0.5) {
-        // Going from dark (35%) to light (65%)
         lightness = 35 + (progress * 2 * 30);
       } else {
-        // Going from light (65%) back to dark (35%)
         lightness = 65 - ((progress - 0.5) * 2 * 30);
       }
       return {
@@ -213,6 +238,13 @@ export function PomodoroTimer() {
           >
             <Settings className="w-5 h-5 text-foreground" />
           </Link>
+          <button
+            onClick={handleLogout}
+            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
+            aria-label="Sair"
+          >
+            <LogOut className="w-5 h-5 text-foreground" />
+          </button>
         </div>
 
         {/* Cycle counter */}
@@ -251,10 +283,9 @@ export function PomodoroTimer() {
         {/* Phase-specific inputs */}
         <div className="w-full max-w-sm mb-8 animate-slide-up">
           {currentPhase === 'immersion' && (
-            <TagInput
-              value={tag}
-              onChange={setTag}
-              placeholder="🎯 Tag de foco (ex: Estudar JS)"
+            <TagSelector
+              selectedTags={selectedTags}
+              onTagsChange={setSelectedTags}
             />
           )}
           {currentPhase === 'dive' && (
@@ -274,11 +305,24 @@ export function PomodoroTimer() {
         </div>
 
         {/* Controls */}
-        <ControlButtons
-          isRunning={isRunning}
-          onPlayPause={handlePlayPause}
-          onSkip={handleSkip}
-        />
+        <div className="flex flex-col items-center gap-4">
+          <ControlButtons
+            isRunning={isRunning}
+            onPlayPause={handlePlayPause}
+            onSkip={handleSkip}
+          />
+          
+          {/* Complete Cycle Button */}
+          {isRunning && (
+            <button
+              onClick={handleCompleteCycle}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl glass-button text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Concluir fase
+            </button>
+          )}
+        </div>
 
         {/* Phase Popup */}
         <PhasePopup
