@@ -24,6 +24,7 @@ export type Database = {
           phase: string
           start_time: string
           tag: string | null
+          user_id: string | null
         }
         Insert: {
           actions?: string | null
@@ -34,6 +35,7 @@ export type Database = {
           phase: string
           start_time: string
           tag?: string | null
+          user_id?: string | null
         }
         Update: {
           actions?: string | null
@@ -44,8 +46,42 @@ export type Database = {
           phase?: string
           start_time?: string
           tag?: string | null
+          user_id?: string | null
         }
         Relationships: []
+      }
+      cycle_tags: {
+        Row: {
+          cycle_id: string
+          id: string
+          tag_id: string
+        }
+        Insert: {
+          cycle_id: string
+          id?: string
+          tag_id: string
+        }
+        Update: {
+          cycle_id?: string
+          id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cycle_tags_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "cycle_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cycle_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pomodoro_settings: {
         Row: {
@@ -55,6 +91,7 @@ export type Database = {
           id: string
           immersion_minutes: number
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           breath_minutes?: number
@@ -63,6 +100,7 @@ export type Database = {
           id?: string
           immersion_minutes?: number
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           breath_minutes?: number
@@ -71,6 +109,55 @@ export type Database = {
           id?: string
           immersion_minutes?: number
           updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tags: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
         }
         Relationships: []
       }
