@@ -9,6 +9,7 @@ import { ControlButtons } from "./ControlButtons";
 import { TagSelector, Tag } from "./TagSelector";
 import { TagInput } from "./TagInput";
 import { PhasePopup } from "./PhasePopup";
+import { NowPlaying } from "./NowPlaying";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -336,6 +337,11 @@ export function PomodoroTimer() {
               Concluir fase
             </button>
           )}
+        </div>
+
+        {/* Now Playing - Spotify */}
+        <div className="mt-6">
+          <NowPlaying />
         </div>
 
         {/* Phase Popup */}
