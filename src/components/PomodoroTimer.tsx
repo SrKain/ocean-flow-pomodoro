@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Settings, BarChart3, LogOut, CheckCircle } from "lucide-react";
+import { Settings, BarChart3, LogOut, CheckCircle, ListTodo, Calendar } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Phase, getSettingsAsync, saveCycleRecordAsync, PomodoroSettings } from "@/lib/database";
@@ -172,10 +172,10 @@ export function PomodoroTimer() {
   // Calculate background style based on phase and progress
   const getBackgroundStyle = () => {
     if (currentPhase === 'dive') {
-      // Pure black for OLED, but lighten in the last 25%
-      if (progress >= 0.75) {
-        // Last 25%: gradually lighten from black to dark blue
-        const lightenProgress = (progress - 0.75) / 0.25; // 0 to 1 in last quarter
+      // Pure black for OLED, but lighten in the last 50%
+      if (progress >= 0.5) {
+        // Last 50%: gradually lighten from black to dark blue
+        const lightenProgress = (progress - 0.5) / 0.5; // 0 to 1 in last half
         const lightness = lightenProgress * 15; // 0% to 15%
         return {
           background: `linear-gradient(180deg, hsl(210, 50%, ${lightness}%) 0%, hsl(215, 60%, ${lightness * 0.7}%) 100%)`
@@ -224,6 +224,20 @@ export function PomodoroTimer() {
       <div className="relative min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 z-10">
         {/* Top bar buttons */}
         <div className="absolute top-6 right-6 flex gap-3">
+          <Link
+            to="/tasks"
+            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
+            aria-label="Missões"
+          >
+            <ListTodo className="w-5 h-5 text-foreground" />
+          </Link>
+          <Link
+            to="/summary"
+            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
+            aria-label="Resumo do Dia"
+          >
+            <Calendar className="w-5 h-5 text-foreground" />
+          </Link>
           <Link
             to="/dashboard"
             className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
