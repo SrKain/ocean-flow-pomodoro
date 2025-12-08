@@ -22,7 +22,7 @@ interface SpotifyContextType {
 const SpotifyContext = createContext<SpotifyContextType | undefined>(undefined);
 
 const SPOTIFY_CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || '';
-const REDIRECT_URI = `${window.location.origin}/`;
+const REDIRECT_URI = window.location.origin;
 const SCOPES = ['user-read-currently-playing', 'user-read-playback-state'];
 
 // PKCE helpers
