@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
+import { useAuth } from './useAuth';
 
 interface SpotifyTrack {
   name: string;
@@ -49,18 +50,34 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
   return base64urlencode(hashed);
 }
 
+// Helper to get user-specific storage keys
+function getStorageKey(userId: string | undefined, key: string): string {
+  return userId ? `spotify_${key}_${userId}` : `spotify_${key}`;
+}
+
 export function SpotifyProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [currentTrack, setCurrentTrack] = useState<SpotifyTrack | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load tokens from localStorage on mount
+  // Load tokens from localStorage on mount or when user changes
   useEffect(() => {
-    const storedToken = localStorage.getItem('spotify_access_token');
-    const storedRefresh = localStorage.getItem('spotify_refresh_token');
-    const storedExpiry = localStorage.getItem('spotify_expires_at');
+    if (!user) {
+      // Clear state when user logs out
+      setAccessToken(null);
+      setRefreshToken(null);
+      setExpiresAt(null);
+      setCurrentTrack(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const storedToken = localStorage.getItem(getStorageKey(user.id, 'access_token'));
+    const storedRefresh = localStorage.getItem(getStorageKey(user.id, 'refresh_token'));
+    const storedExpiry = localStorage.getItem(getStorageKey(user.id, 'expires_at'));
     
     if (storedToken && storedExpiry) {
       const expiry = parseInt(storedExpiry);
@@ -73,7 +90,7 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       }
     }
     setIsLoading(false);
-  }, []);
+  }, [user]);
 
   // Handle OAuth callback
   useEffect(() => {
@@ -88,11 +105,11 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       window.history.replaceState({}, document.title, window.location.pathname);
       localStorage.removeItem('spotify_auth_state');
     }
-  }, []);
+  }, [user]);
 
   const exchangeCodeForToken = async (code: string) => {
     const verifier = localStorage.getItem('spotify_code_verifier');
-    if (!verifier) return;
+    if (!verifier || !user) return;
 
     try {
       const response = await fetch('https://accounts.spotify.com/api/token', {
@@ -114,9 +131,10 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
         setRefreshToken(data.refresh_token);
         setExpiresAt(expiry);
         
-        localStorage.setItem('spotify_access_token', data.access_token);
-        localStorage.setItem('spotify_refresh_token', data.refresh_token);
-        localStorage.setItem('spotify_expires_at', expiry.toString());
+        // Store with user-specific keys
+        localStorage.setItem(getStorageKey(user.id, 'access_token'), data.access_token);
+        localStorage.setItem(getStorageKey(user.id, 'refresh_token'), data.refresh_token);
+        localStorage.setItem(getStorageKey(user.id, 'expires_at'), expiry.toString());
         localStorage.removeItem('spotify_code_verifier');
       }
     } catch (error) {
@@ -125,6 +143,8 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshAccessToken = async (token: string) => {
+    if (!user) return;
+    
     try {
       const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
@@ -143,10 +163,10 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
         setExpiresAt(expiry);
         if (data.refresh_token) {
           setRefreshToken(data.refresh_token);
-          localStorage.setItem('spotify_refresh_token', data.refresh_token);
+          localStorage.setItem(getStorageKey(user.id, 'refresh_token'), data.refresh_token);
         }
-        localStorage.setItem('spotify_access_token', data.access_token);
-        localStorage.setItem('spotify_expires_at', expiry.toString());
+        localStorage.setItem(getStorageKey(user.id, 'access_token'), data.access_token);
+        localStorage.setItem(getStorageKey(user.id, 'expires_at'), expiry.toString());
       }
     } catch (error) {
       console.error('Error refreshing token:', error);
@@ -157,6 +177,11 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   const connect = useCallback(async () => {
     if (!SPOTIFY_CLIENT_ID) {
       console.error('Spotify Client ID not configured');
+      return;
+    }
+
+    if (!user) {
+      console.error('User must be logged in to connect Spotify');
       return;
     }
 
@@ -178,21 +203,24 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     });
 
     window.location.href = `https://accounts.spotify.com/authorize?${params}`;
-  }, []);
+  }, [user]);
 
   const disconnect = useCallback(() => {
     setAccessToken(null);
     setRefreshToken(null);
     setExpiresAt(null);
     setCurrentTrack(null);
-    localStorage.removeItem('spotify_access_token');
-    localStorage.removeItem('spotify_refresh_token');
-    localStorage.removeItem('spotify_expires_at');
-  }, []);
+    
+    if (user) {
+      localStorage.removeItem(getStorageKey(user.id, 'access_token'));
+      localStorage.removeItem(getStorageKey(user.id, 'refresh_token'));
+      localStorage.removeItem(getStorageKey(user.id, 'expires_at'));
+    }
+  }, [user]);
 
   // Fetch currently playing track
   const fetchCurrentTrack = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || !user) return;
 
     // Check if token needs refresh
     if (expiresAt && Date.now() > expiresAt - 60000 && refreshToken) {
@@ -236,16 +264,16 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error fetching current track:', error);
     }
-  }, [accessToken, expiresAt, refreshToken, disconnect]);
+  }, [accessToken, expiresAt, refreshToken, disconnect, user]);
 
   // Poll for current track every 5 seconds
   useEffect(() => {
-    if (!accessToken) return;
+    if (!accessToken || !user) return;
 
     fetchCurrentTrack();
     const interval = setInterval(fetchCurrentTrack, 5000);
     return () => clearInterval(interval);
-  }, [accessToken, fetchCurrentTrack]);
+  }, [accessToken, fetchCurrentTrack, user]);
 
   return (
     <SpotifyContext.Provider
