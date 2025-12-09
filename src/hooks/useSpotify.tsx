@@ -21,7 +21,8 @@ interface SpotifyContextType {
 
 const SpotifyContext = createContext<SpotifyContextType | undefined>(undefined);
 
-const SPOTIFY_CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || '';
+// Spotify Client ID - this is a public key, safe to include in frontend code
+const SPOTIFY_CLIENT_ID = '2160e371390d4d28b0a9094d24365c84';
 const REDIRECT_URI = window.location.origin;
 const SCOPES = ['user-read-currently-playing', 'user-read-playback-state'];
 

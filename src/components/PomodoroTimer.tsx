@@ -7,7 +7,7 @@ import { PolarRing } from "./PolarRing";
 import { TimerDisplay } from "./TimerDisplay";
 import { ControlButtons } from "./ControlButtons";
 import { TagSelector, Tag } from "./TagSelector";
-import { TagInput } from "./TagInput";
+import { DiveTagSelector } from "./DiveTagSelector";
 import { PhasePopup } from "./PhasePopup";
 import { NowPlaying } from "./NowPlaying";
 import { useWakeLock } from "@/hooks/useWakeLock";
@@ -35,7 +35,8 @@ export function PomodoroTimer() {
   const [isRunning, setIsRunning] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
-  const [actions, setActions] = useState('');
+  const [diveTags, setDiveTags] = useState<Tag[]>([]);
+  const [diveNotes, setDiveNotes] = useState('');
   const [cycleCount, setCycleCount] = useState(0);
   
   const startTimeRef = useRef<string | null>(null);
@@ -72,17 +73,30 @@ export function PomodoroTimer() {
 
   const saveCycle = useCallback((completed: boolean) => {
     if (startTimeRef.current) {
-      const tagNames = selectedTags.map(t => t.name).join(', ');
+      const immersionTagNames = selectedTags.map(t => t.name).join(', ');
+      const diveTagNames = diveTags.map(t => t.name).join(', ');
+      
+      // For dive phase, combine tags and notes
+      let tagValue: string | undefined;
+      let actionsValue: string | undefined;
+      
+      if (currentPhase === 'immersion') {
+        tagValue = immersionTagNames;
+      } else if (currentPhase === 'dive') {
+        tagValue = diveTagNames;
+        actionsValue = diveNotes;
+      }
+      
       saveCycleRecordAsync({
         phase: currentPhase,
         startTime: startTimeRef.current,
         endTime: new Date().toISOString(),
-        tag: currentPhase === 'immersion' ? tagNames : undefined,
-        actions: currentPhase === 'dive' ? actions : undefined,
+        tag: tagValue,
+        actions: actionsValue,
         completed,
       });
     }
-  }, [currentPhase, selectedTags, actions]);
+  }, [currentPhase, selectedTags, diveTags, diveNotes]);
 
   const startPhase = useCallback((phase: Phase) => {
     const time = getPhaseTime(phase);
@@ -304,11 +318,11 @@ export function PomodoroTimer() {
             />
           )}
           {currentPhase === 'dive' && (
-            <TagInput
-              value={actions}
-              onChange={setActions}
-              placeholder="📝 Ações do mergulho..."
-              multiline
+            <DiveTagSelector
+              selectedTags={diveTags}
+              onTagsChange={setDiveTags}
+              notes={diveNotes}
+              onNotesChange={setDiveNotes}
             />
           )}
           {currentPhase === 'breath' && (
