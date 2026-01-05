@@ -93,19 +93,28 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, [user]);
 
-  // Handle OAuth callback
+  // Handle OAuth callback (wait for app auth user to be ready)
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const state = urlParams.get('state');
     const storedState = localStorage.getItem('spotify_auth_state');
-    
-    if (code && state === storedState) {
+
+    if (!code) return;
+
+    // IMPORTANT: When returning from Spotify, the app may still be loading auth.
+    // If we consume/clean the URL too early, we lose the code before we can exchange it.
+    if (!user) return;
+
+    if (state && storedState && state === storedState) {
       exchangeCodeForToken(code);
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      localStorage.removeItem('spotify_auth_state');
+    } else {
+      console.error('Spotify OAuth state mismatch. Please try connecting again.');
     }
+
+    // Clean URL (remove code/state)
+    window.history.replaceState({}, document.title, window.location.pathname);
+    localStorage.removeItem('spotify_auth_state');
   }, [user]);
 
   const exchangeCodeForToken = async (code: string) => {
@@ -126,12 +135,18 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       });
 
       const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Spotify token exchange failed:', data);
+        return;
+      }
+
       if (data.access_token) {
         const expiry = Date.now() + data.expires_in * 1000;
         setAccessToken(data.access_token);
         setRefreshToken(data.refresh_token);
         setExpiresAt(expiry);
-        
+
         // Store with user-specific keys
         localStorage.setItem(getStorageKey(user.id, 'access_token'), data.access_token);
         localStorage.setItem(getStorageKey(user.id, 'refresh_token'), data.refresh_token);
