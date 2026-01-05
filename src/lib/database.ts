@@ -124,6 +124,26 @@ export async function saveCycleRecordAsync(record: Omit<CycleRecord, 'id'>): Pro
   }
 }
 
+// Update cycle rating
+export async function updateCycleRatingAsync(cycleId: string, rating: number): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('cycle_records')
+      .update({ rating })
+      .eq('id', cycleId);
+
+    if (error) {
+      console.error('Error updating cycle rating:', error);
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Error updating cycle rating:', e);
+    return false;
+  }
+}
+
 export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<CycleRecord[]> {
   try {
     const userId = await getCurrentUserId();
