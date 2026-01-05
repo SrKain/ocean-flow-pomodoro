@@ -22,6 +22,7 @@ export type Database = {
           end_time: string
           id: string
           phase: string
+          rating: number | null
           start_time: string
           tag: string | null
           user_id: string | null
@@ -33,6 +34,7 @@ export type Database = {
           end_time: string
           id?: string
           phase: string
+          rating?: number | null
           start_time: string
           tag?: string | null
           user_id?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           end_time?: string
           id?: string
           phase?: string
+          rating?: number | null
           start_time?: string
           tag?: string | null
           user_id?: string | null

@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Settings, BarChart3, LogOut, CheckCircle, ListTodo, Calendar } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Phase, getSettingsAsync, saveCycleRecordAsync, PomodoroSettings } from "@/lib/database";
+import { Phase, getSettingsAsync, saveCycleRecordAsync, PomodoroSettings, updateCycleRatingAsync } from "@/lib/database";
 import { PolarRing } from "./PolarRing";
 import { TimerDisplay } from "./TimerDisplay";
 import { ControlButtons } from "./ControlButtons";
 import { TagSelector, Tag } from "./TagSelector";
 import { DiveTagSelector } from "./DiveTagSelector";
 import { PhasePopup } from "./PhasePopup";
+import { RatingPopup } from "./RatingPopup";
 import { NowPlaying } from "./NowPlaying";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,10 +35,12 @@ export function PomodoroTimer() {
   const [totalTime, setTotalTime] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  const [showRatingPopup, setShowRatingPopup] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [diveTags, setDiveTags] = useState<Tag[]>([]);
   const [diveNotes, setDiveNotes] = useState('');
   const [cycleCount, setCycleCount] = useState(0);
+  const [lastBreathCycleId, setLastBreathCycleId] = useState<string | null>(null);
   
   const startTimeRef = useRef<string | null>(null);
   const pendingPhaseRef = useRef<Phase | null>(null);
@@ -71,7 +74,7 @@ export function PomodoroTimer() {
     return phaseOrder[(currentIndex + 1) % phaseOrder.length];
   };
 
-  const saveCycle = useCallback((completed: boolean) => {
+  const saveCycle = useCallback(async (completed: boolean): Promise<string | null> => {
     if (startTimeRef.current) {
       const immersionTagNames = selectedTags.map(t => t.name).join(', ');
       const diveTagNames = diveTags.map(t => t.name).join(', ');
@@ -87,7 +90,7 @@ export function PomodoroTimer() {
         actionsValue = diveNotes;
       }
       
-      saveCycleRecordAsync({
+      const cycleId = await saveCycleRecordAsync({
         phase: currentPhase,
         startTime: startTimeRef.current,
         endTime: new Date().toISOString(),
@@ -95,7 +98,10 @@ export function PomodoroTimer() {
         actions: actionsValue,
         completed,
       });
+      
+      return cycleId;
     }
+    return null;
   }, [currentPhase, selectedTags, diveTags, diveNotes]);
 
   const startPhase = useCallback((phase: Phase) => {
@@ -112,18 +118,24 @@ export function PomodoroTimer() {
     }
   }, [getPhaseTime]);
 
-  const handlePhaseComplete = useCallback(() => {
+  const handlePhaseComplete = useCallback(async () => {
     setIsRunning(false);
-    saveCycle(true);
+    const cycleId = await saveCycle(true);
+    
+    // If breath phase completed, show rating popup
+    if (currentPhase === 'breath' && cycleId) {
+      setLastBreathCycleId(cycleId);
+      setShowRatingPopup(true);
+    }
     
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
     setShowPopup(true);
   }, [currentPhase, saveCycle]);
 
-  const handleSkip = useCallback(() => {
+  const handleSkip = useCallback(async () => {
     setIsRunning(false);
-    saveCycle(false);
+    await saveCycle(false);
     
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
@@ -131,9 +143,15 @@ export function PomodoroTimer() {
   }, [currentPhase, saveCycle]);
 
   // Complete cycle button - finishes current phase and shows popup
-  const handleCompleteCycle = useCallback(() => {
+  const handleCompleteCycle = useCallback(async () => {
     setIsRunning(false);
-    saveCycle(true);
+    const cycleId = await saveCycle(true);
+    
+    // If breath phase completed, show rating popup
+    if (currentPhase === 'breath' && cycleId) {
+      setLastBreathCycleId(cycleId);
+      setShowRatingPopup(true);
+    }
     
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
@@ -156,6 +174,19 @@ export function PomodoroTimer() {
 
   const handleWait = () => {
     setShowPopup(false);
+  };
+
+  const handleRatingSubmit = async (rating: number) => {
+    if (lastBreathCycleId) {
+      await updateCycleRatingAsync(lastBreathCycleId, rating);
+      setLastBreathCycleId(null);
+    }
+    setShowRatingPopup(false);
+  };
+
+  const handleRatingSkip = () => {
+    setLastBreathCycleId(null);
+    setShowRatingPopup(false);
   };
 
   const handleLogout = async () => {
@@ -364,6 +395,13 @@ export function PomodoroTimer() {
           nextPhase={pendingPhaseRef.current || getNextPhase(currentPhase)}
           onContinue={handleContinue}
           onWait={handleWait}
+        />
+
+        {/* Rating Popup - shows after completing breath phase */}
+        <RatingPopup
+          isOpen={showRatingPopup}
+          onSubmit={handleRatingSubmit}
+          onSkip={handleRatingSkip}
         />
       </div>
     </div>
