@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Clock, Target, Zap, Calendar, BarChart2, PieChart as PieChartIcon, TrendingUp } from "lucide-react";
+import { ArrowLeft, Clock, Target, Zap, Calendar, BarChart2, PieChart as PieChartIcon, TrendingUp, Star, Music } from "lucide-react";
 import { Link } from "react-router-dom";
 import { 
   getTagStatsAsync, 
@@ -7,9 +7,16 @@ import {
   getTotalCompletedCyclesAsync,
   getTotalFocusMinutesAsync,
   getDailyStatsAsync,
+  getRatingStatsAsync,
+  getMusicFocusStatsAsync,
+  getTopTracksByRatingAsync,
   CycleRecord,
-  TagStats 
+  TagStats,
+  RatingStats,
+  MusicFocusStats
 } from "@/lib/database";
+import { RatingAnalytics } from "@/components/RatingAnalytics";
+import { MusicAnalytics } from "@/components/MusicAnalytics";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -103,6 +110,9 @@ export default function Dashboard() {
   const [totalCycles, setTotalCycles] = useState(0);
   const [totalMinutes, setTotalMinutes] = useState(0);
   const [dailyStats, setDailyStats] = useState<{ date: string; minutes: number; cycles: number }[]>([]);
+  const [ratingStats, setRatingStats] = useState<RatingStats>({ averageRating: 0, totalRated: 0, distribution: [] });
+  const [musicStats, setMusicStats] = useState<MusicFocusStats[]>([]);
+  const [topTracks, setTopTracks] = useState<{ track: string; artist: string; avgRating: number; cycleCount: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<PeriodFilter>(7);
   const [chartType, setChartType] = useState<ChartType>('bar');
@@ -122,13 +132,19 @@ export default function Dashboard() {
       getRecentCyclesAsync(15, startDate, endDate),
       getTotalCompletedCyclesAsync(startDate, endDate),
       getTotalFocusMinutesAsync(startDate, endDate),
-      getDailyStatsAsync(startDate, endDate)
-    ]).then(([stats, cycles, total, minutes, daily]) => {
+      getDailyStatsAsync(startDate, endDate),
+      getRatingStatsAsync(startDate, endDate),
+      getMusicFocusStatsAsync(startDate, endDate),
+      getTopTracksByRatingAsync(startDate, endDate)
+    ]).then(([stats, cycles, total, minutes, daily, ratings, music, tracks]) => {
       setTagStats(stats);
       setRecentCycles(cycles);
       setTotalCycles(total);
       setTotalMinutes(minutes);
       setDailyStats(daily);
+      setRatingStats(ratings);
+      setMusicStats(music);
+      setTopTracks(tracks);
       setLoading(false);
     });
   }, [dateRange]);
@@ -265,6 +281,24 @@ export default function Dashboard() {
             </div>
           </section>
         )}
+
+        {/* Rating Analytics Section */}
+        <section className="mb-6">
+          <h2 className="text-lg font-medium text-foreground mb-4 flex items-center gap-2">
+            <Star className="w-5 h-5 text-yellow-400" />
+            Avaliações dos Ciclos
+          </h2>
+          <RatingAnalytics stats={ratingStats} />
+        </section>
+
+        {/* Music × Focus Correlation Section */}
+        <section className="mb-6">
+          <h2 className="text-lg font-medium text-foreground mb-4 flex items-center gap-2">
+            <Music className="w-5 h-5 text-primary" />
+            Música × Qualidade de Foco
+          </h2>
+          <MusicAnalytics stats={musicStats} topTracks={topTracks} />
+        </section>
 
         {/* Tags section with charts */}
         <section className="mb-6">

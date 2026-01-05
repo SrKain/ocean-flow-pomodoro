@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Settings, BarChart3, LogOut, CheckCircle, ListTodo, Calendar } from "lucide-react";
+import { Settings, BarChart3, LogOut, CheckCircle, Calendar, Minimize2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Phase, getSettingsAsync, saveCycleRecordAsync, PomodoroSettings, updateCycleRatingAsync } from "@/lib/database";
@@ -11,8 +11,12 @@ import { DiveTagSelector } from "./DiveTagSelector";
 import { PhasePopup } from "./PhasePopup";
 import { RatingPopup } from "./RatingPopup";
 import { NowPlaying } from "./NowPlaying";
+import { MissionsPopup } from "./MissionsPopup";
+import { MissionsWidget } from "./MissionsWidget";
+import { PictureInPicture } from "./PictureInPicture";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useAuth } from "@/hooks/useAuth";
+import { useSpotify } from "@/hooks/useSpotify";
 
 const phaseOrder: Phase[] = ['immersion', 'dive', 'breath'];
 
@@ -36,6 +40,8 @@ export function PomodoroTimer() {
   const [isRunning, setIsRunning] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [showRatingPopup, setShowRatingPopup] = useState(false);
+  const [showMissionsPopup, setShowMissionsPopup] = useState(false);
+  const [showPip, setShowPip] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [diveTags, setDiveTags] = useState<Tag[]>([]);
   const [diveNotes, setDiveNotes] = useState('');
@@ -46,6 +52,7 @@ export function PomodoroTimer() {
   const pendingPhaseRef = useRef<Phase | null>(null);
   
   const { signOut } = useAuth();
+  const { currentTrack } = useSpotify();
   const navigate = useNavigate();
 
   // Keep screen on while timer is running
@@ -89,6 +96,11 @@ export function PomodoroTimer() {
         tagValue = diveTagNames;
         actionsValue = diveNotes;
       }
+
+      // Get current spotify track info
+      const spotifyTrackName = currentTrack?.name;
+      const spotifyArtist = currentTrack?.artist;
+      const spotifyAlbum = currentTrack?.album;
       
       const cycleId = await saveCycleRecordAsync({
         phase: currentPhase,
@@ -97,12 +109,15 @@ export function PomodoroTimer() {
         tag: tagValue,
         actions: actionsValue,
         completed,
+        spotifyTrackName,
+        spotifyArtist,
+        spotifyAlbum,
       });
       
       return cycleId;
     }
     return null;
-  }, [currentPhase, selectedTags, diveTags, diveNotes]);
+  }, [currentPhase, selectedTags, diveTags, diveNotes, currentTrack]);
 
   const startPhase = useCallback((phase: Phase) => {
     const time = getPhaseTime(phase);
@@ -270,13 +285,13 @@ export function PomodoroTimer() {
       <div className="relative min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 z-10">
         {/* Top bar buttons */}
         <div className="absolute top-6 right-6 flex gap-3">
-          <Link
-            to="/tasks"
+          <button
+            onClick={() => setShowPip(true)}
             className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
-            aria-label="Missões"
+            aria-label="Picture in Picture"
           >
-            <ListTodo className="w-5 h-5 text-foreground" />
-          </Link>
+            <Minimize2 className="w-5 h-5 text-foreground" />
+          </button>
           <Link
             to="/summary"
             className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
@@ -307,10 +322,13 @@ export function PomodoroTimer() {
           </button>
         </div>
 
-        {/* Cycle counter */}
-        <div className="absolute top-6 left-6 glass px-4 py-2 rounded-full">
-          <span className="text-sm text-muted-foreground">Ciclo </span>
-          <span className="text-foreground font-semibold">{cycleCount}</span>
+        {/* Left side - Cycle counter and Missions widget */}
+        <div className="absolute top-6 left-6 flex flex-col gap-3">
+          <div className="glass px-4 py-2 rounded-full">
+            <span className="text-sm text-muted-foreground">Ciclo </span>
+            <span className="text-foreground font-semibold">{cycleCount}</span>
+          </div>
+          <MissionsWidget onClick={() => setShowMissionsPopup(true)} />
         </div>
 
         {/* Phase indicator */}
@@ -402,6 +420,23 @@ export function PomodoroTimer() {
           isOpen={showRatingPopup}
           onSubmit={handleRatingSubmit}
           onSkip={handleRatingSkip}
+        />
+
+        {/* Missions Popup */}
+        <MissionsPopup
+          isOpen={showMissionsPopup}
+          onClose={() => setShowMissionsPopup(false)}
+        />
+
+        {/* Picture in Picture */}
+        <PictureInPicture
+          isOpen={showPip}
+          onClose={() => setShowPip(false)}
+          timeLeft={timeLeft}
+          totalTime={totalTime}
+          currentPhase={currentPhase}
+          isRunning={isRunning}
+          onPlayPause={handlePlayPause}
         />
       </div>
     </div>

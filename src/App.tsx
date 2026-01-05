@@ -9,7 +9,6 @@ import Index from "./pages/Index";
 import Settings from "./pages/Settings";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
-import Tasks from "./pages/Tasks";
 import DailySummary from "./pages/DailySummary";
 import NotFound from "./pages/NotFound";
 
@@ -58,14 +57,6 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute>
             <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/tasks"
-        element={
-          <ProtectedRoute>
-            <Tasks />
           </ProtectedRoute>
         }
       />

@@ -23,6 +23,9 @@ export type Database = {
           id: string
           phase: string
           rating: number | null
+          spotify_album: string | null
+          spotify_artist: string | null
+          spotify_track_name: string | null
           start_time: string
           tag: string | null
           user_id: string | null
@@ -35,6 +38,9 @@ export type Database = {
           id?: string
           phase: string
           rating?: number | null
+          spotify_album?: string | null
+          spotify_artist?: string | null
+          spotify_track_name?: string | null
           start_time: string
           tag?: string | null
           user_id?: string | null
@@ -47,6 +53,9 @@ export type Database = {
           id?: string
           phase?: string
           rating?: number | null
+          spotify_album?: string | null
+          spotify_artist?: string | null
+          spotify_track_name?: string | null
           start_time?: string
           tag?: string | null
           user_id?: string | null
