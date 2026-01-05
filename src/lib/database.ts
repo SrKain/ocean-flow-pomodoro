@@ -17,6 +17,10 @@ export interface CycleRecord {
   actions?: string;
   completed: boolean;
   userId?: string;
+  rating?: number;
+  spotifyTrackName?: string;
+  spotifyArtist?: string;
+  spotifyAlbum?: string;
 }
 
 export interface TagStats {
@@ -24,6 +28,20 @@ export interface TagStats {
   cycleCount: number;
   totalTimeMinutes: number;
   actions: string[];
+}
+
+export interface RatingStats {
+  averageRating: number;
+  totalRated: number;
+  distribution: { rating: number; count: number }[];
+}
+
+export interface MusicFocusStats {
+  artist: string;
+  trackName?: string;
+  cycleCount: number;
+  averageRating: number;
+  totalMinutes: number;
 }
 
 const defaultSettings: PomodoroSettings = {
@@ -108,6 +126,9 @@ export async function saveCycleRecordAsync(record: Omit<CycleRecord, 'id'>): Pro
         tag: record.tag || null,
         actions: record.actions || null,
         completed: record.completed,
+        spotify_track_name: record.spotifyTrackName || null,
+        spotify_artist: record.spotifyArtist || null,
+        spotify_album: record.spotifyAlbum || null,
       })
       .select('id')
       .single();
@@ -178,6 +199,10 @@ export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<
       actions: row.actions || undefined,
       completed: row.completed,
       userId: row.user_id || undefined,
+      rating: row.rating || undefined,
+      spotifyTrackName: row.spotify_track_name || undefined,
+      spotifyArtist: row.spotify_artist || undefined,
+      spotifyAlbum: row.spotify_album || undefined,
     }));
   } catch (e) {
     console.error('Error reading cycles:', e);
@@ -284,6 +309,10 @@ export async function getRecentCyclesAsync(limit: number = 20, startDate?: Date,
       actions: row.actions || undefined,
       completed: row.completed,
       userId: row.user_id || undefined,
+      rating: row.rating || undefined,
+      spotifyTrackName: row.spotify_track_name || undefined,
+      spotifyArtist: row.spotify_artist || undefined,
+      spotifyAlbum: row.spotify_album || undefined,
     }));
   } catch (e) {
     console.error('Error reading recent cycles:', e);
@@ -391,4 +420,253 @@ export async function getDailyStatsAsync(startDate: Date, endDate: Date): Promis
 
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Get rating statistics
+export async function getRatingStatsAsync(startDate?: Date, endDate?: Date): Promise<RatingStats> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return { averageRating: 0, totalRated: 0, distribution: [] };
+
+    let query = supabase
+      .from('cycle_records')
+      .select('rating')
+      .eq('user_id', userId)
+      .eq('phase', 'breath')
+      .eq('completed', true)
+      .not('rating', 'is', null);
+
+    if (startDate) {
+      query = query.gte('created_at', startDate.toISOString());
+    }
+    if (endDate) {
+      query = query.lte('created_at', endDate.toISOString());
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching rating stats:', error);
+      return { averageRating: 0, totalRated: 0, distribution: [] };
+    }
+
+    const ratings = (data || []).map(d => d.rating as number);
+    const totalRated = ratings.length;
+    
+    if (totalRated === 0) {
+      return { averageRating: 0, totalRated: 0, distribution: [] };
+    }
+
+    const averageRating = ratings.reduce((a, b) => a + b, 0) / totalRated;
+    
+    // Calculate distribution
+    const distribution = [1, 2, 3, 4, 5].map(rating => ({
+      rating,
+      count: ratings.filter(r => r === rating).length,
+    }));
+
+    return { averageRating, totalRated, distribution };
+  } catch (e) {
+    console.error('Error getting rating stats:', e);
+    return { averageRating: 0, totalRated: 0, distribution: [] };
+  }
+}
+
+// Get daily rating averages
+export async function getDailyRatingStatsAsync(startDate: Date, endDate: Date): Promise<{ date: string; avgRating: number; count: number }[]> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('cycle_records')
+      .select('created_at, rating')
+      .eq('user_id', userId)
+      .eq('phase', 'breath')
+      .eq('completed', true)
+      .not('rating', 'is', null)
+      .gte('created_at', startDate.toISOString())
+      .lte('created_at', endDate.toISOString());
+
+    if (error) {
+      console.error('Error fetching daily ratings:', error);
+      return [];
+    }
+
+    const dailyMap = new Map<string, { sum: number; count: number }>();
+    
+    // Initialize all days
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      dailyMap.set(dateStr, { sum: 0, count: 0 });
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    for (const row of data || []) {
+      const dateStr = new Date(row.created_at).toISOString().split('T')[0];
+      const existing = dailyMap.get(dateStr) || { sum: 0, count: 0 };
+      dailyMap.set(dateStr, { 
+        sum: existing.sum + (row.rating as number), 
+        count: existing.count + 1 
+      });
+    }
+
+    return Array.from(dailyMap.entries())
+      .map(([date, stats]) => ({ 
+        date, 
+        avgRating: stats.count > 0 ? stats.sum / stats.count : 0,
+        count: stats.count
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  } catch (e) {
+    console.error('Error getting daily rating stats:', e);
+    return [];
+  }
+}
+
+// Get music × focus correlation stats
+export async function getMusicFocusStatsAsync(startDate?: Date, endDate?: Date): Promise<MusicFocusStats[]> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    let query = supabase
+      .from('cycle_records')
+      .select('spotify_artist, spotify_track_name, rating, start_time, end_time')
+      .eq('user_id', userId)
+      .eq('phase', 'dive')
+      .eq('completed', true);
+
+    if (startDate) {
+      query = query.gte('created_at', startDate.toISOString());
+    }
+    if (endDate) {
+      query = query.lte('created_at', endDate.toISOString());
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching music stats:', error);
+      return [];
+    }
+
+    const artistMap = new Map<string, { 
+      cycleCount: number; 
+      ratingSum: number; 
+      ratingCount: number; 
+      totalMinutes: number;
+      tracks: Set<string>;
+    }>();
+
+    for (const row of data || []) {
+      const artist = row.spotify_artist || 'Sem música';
+      const trackName = row.spotify_track_name || undefined;
+      
+      if (!artistMap.has(artist)) {
+        artistMap.set(artist, { 
+          cycleCount: 0, 
+          ratingSum: 0, 
+          ratingCount: 0, 
+          totalMinutes: 0,
+          tracks: new Set()
+        });
+      }
+      
+      const stats = artistMap.get(artist)!;
+      stats.cycleCount += 1;
+      
+      if (row.rating) {
+        stats.ratingSum += row.rating;
+        stats.ratingCount += 1;
+      }
+      
+      const startTime = new Date(row.start_time).getTime();
+      const endTime = new Date(row.end_time).getTime();
+      stats.totalMinutes += Math.round((endTime - startTime) / 60000);
+      
+      if (trackName) {
+        stats.tracks.add(trackName);
+      }
+    }
+
+    return Array.from(artistMap.entries())
+      .map(([artist, stats]) => ({
+        artist,
+        cycleCount: stats.cycleCount,
+        averageRating: stats.ratingCount > 0 ? stats.ratingSum / stats.ratingCount : 0,
+        totalMinutes: stats.totalMinutes,
+      }))
+      .sort((a, b) => b.totalMinutes - a.totalMinutes);
+  } catch (e) {
+    console.error('Error getting music focus stats:', e);
+    return [];
+  }
+}
+
+// Get top tracks by rating
+export async function getTopTracksByRatingAsync(startDate?: Date, endDate?: Date): Promise<{ track: string; artist: string; avgRating: number; cycleCount: number }[]> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    let query = supabase
+      .from('cycle_records')
+      .select('spotify_artist, spotify_track_name, rating')
+      .eq('user_id', userId)
+      .eq('phase', 'breath')
+      .eq('completed', true)
+      .not('rating', 'is', null)
+      .not('spotify_track_name', 'is', null);
+
+    if (startDate) {
+      query = query.gte('created_at', startDate.toISOString());
+    }
+    if (endDate) {
+      query = query.lte('created_at', endDate.toISOString());
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching top tracks:', error);
+      return [];
+    }
+
+    const trackMap = new Map<string, { artist: string; ratingSum: number; count: number }>();
+
+    for (const row of data || []) {
+      const key = `${row.spotify_track_name}|${row.spotify_artist}`;
+      
+      if (!trackMap.has(key)) {
+        trackMap.set(key, { 
+          artist: row.spotify_artist || 'Desconhecido', 
+          ratingSum: 0, 
+          count: 0 
+        });
+      }
+      
+      const stats = trackMap.get(key)!;
+      stats.ratingSum += row.rating as number;
+      stats.count += 1;
+    }
+
+    return Array.from(trackMap.entries())
+      .map(([key, stats]) => {
+        const [track] = key.split('|');
+        return {
+          track,
+          artist: stats.artist,
+          avgRating: stats.ratingSum / stats.count,
+          cycleCount: stats.count,
+        };
+      })
+      .filter(t => t.cycleCount >= 2) // Only show tracks with at least 2 cycles
+      .sort((a, b) => b.avgRating - a.avgRating)
+      .slice(0, 10);
+  } catch (e) {
+    console.error('Error getting top tracks by rating:', e);
+    return [];
+  }
 }
