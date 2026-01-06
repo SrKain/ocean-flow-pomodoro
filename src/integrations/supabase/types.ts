@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_sessions: {
+        Row: {
+          current_phase: string
+          cycle_count: number
+          extra_time_seconds: number | null
+          id: string
+          is_overtime: boolean
+          is_running: boolean
+          started_at: string | null
+          time_left: number
+          total_time: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_phase?: string
+          cycle_count?: number
+          extra_time_seconds?: number | null
+          id?: string
+          is_overtime?: boolean
+          is_running?: boolean
+          started_at?: string | null
+          time_left?: number
+          total_time?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_phase?: string
+          cycle_count?: number
+          extra_time_seconds?: number | null
+          id?: string
+          is_overtime?: boolean
+          is_running?: boolean
+          started_at?: string | null
+          time_left?: number
+          total_time?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cycle_records: {
         Row: {
           actions: string | null
@@ -149,7 +191,7 @@ export type Database = {
         }
         Relationships: []
       }
-      tags: {
+      tag_groups: {
         Row: {
           color: string | null
           created_at: string
@@ -172,6 +214,41 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      tags: {
+        Row: {
+          color: string | null
+          created_at: string
+          group_id: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tags_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "tag_groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tasks: {
         Row: {
