@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Settings, BarChart3, LogOut, CheckCircle, Calendar, Minimize2 } from "lucide-react";
+import { Settings, BarChart3, LogOut, CheckCircle, Calendar, Minimize2, Tags } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Phase, getSettingsAsync, saveCycleRecordAsync, PomodoroSettings, updateCycleRatingAsync } from "@/lib/database";
@@ -14,6 +14,9 @@ import { NowPlaying } from "./NowPlaying";
 import { MissionsPopup } from "./MissionsPopup";
 import { MissionsWidget } from "./MissionsWidget";
 import { PictureInPicture } from "./PictureInPicture";
+import { DocumentPictureInPicture, useDocumentPipSupport } from "./DocumentPictureInPicture";
+import { OverfocusPopup } from "./OverfocusPopup";
+import { TagManagement } from "./TagManagement";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useAuth } from "@/hooks/useAuth";
 import { useSpotify } from "@/hooks/useSpotify";
