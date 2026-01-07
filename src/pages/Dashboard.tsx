@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Clock, Target, Zap, Calendar, BarChart2, PieChart as PieChartIcon, TrendingUp, Star, Music } from "lucide-react";
+import { ArrowLeft, Clock, Target, Zap, Calendar, BarChart2, PieChart as PieChartIcon, TrendingUp, Star, Music, Brain } from "lucide-react";
 import { Link } from "react-router-dom";
 import { 
   getTagStatsAsync, 
@@ -10,13 +10,16 @@ import {
   getRatingStatsAsync,
   getMusicFocusStatsAsync,
   getTopTracksByRatingAsync,
+  getBreathTagStatsAsync,
   CycleRecord,
   TagStats,
   RatingStats,
-  MusicFocusStats
+  MusicFocusStats,
+  BreathTagStats
 } from "@/lib/database";
 import { RatingAnalytics } from "@/components/RatingAnalytics";
 import { MusicAnalytics } from "@/components/MusicAnalytics";
+import { BreathAnalytics } from "@/components/BreathAnalytics";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -113,6 +116,7 @@ export default function Dashboard() {
   const [ratingStats, setRatingStats] = useState<RatingStats>({ averageRating: 0, totalRated: 0, distribution: [] });
   const [musicStats, setMusicStats] = useState<MusicFocusStats[]>([]);
   const [topTracks, setTopTracks] = useState<{ track: string; artist: string; avgRating: number; cycleCount: number }[]>([]);
+  const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<PeriodFilter>(7);
   const [chartType, setChartType] = useState<ChartType>('bar');
@@ -135,8 +139,9 @@ export default function Dashboard() {
       getDailyStatsAsync(startDate, endDate),
       getRatingStatsAsync(startDate, endDate),
       getMusicFocusStatsAsync(startDate, endDate),
-      getTopTracksByRatingAsync(startDate, endDate)
-    ]).then(([stats, cycles, total, minutes, daily, ratings, music, tracks]) => {
+      getTopTracksByRatingAsync(startDate, endDate),
+      getBreathTagStatsAsync(startDate, endDate)
+    ]).then(([stats, cycles, total, minutes, daily, ratings, music, tracks, breath]) => {
       setTagStats(stats);
       setRecentCycles(cycles);
       setTotalCycles(total);
@@ -145,6 +150,7 @@ export default function Dashboard() {
       setRatingStats(ratings);
       setMusicStats(music);
       setTopTracks(tracks);
+      setBreathStats(breath);
       setLoading(false);
     });
   }, [dateRange]);
@@ -298,6 +304,15 @@ export default function Dashboard() {
             Música × Qualidade de Foco
           </h2>
           <MusicAnalytics stats={musicStats} topTracks={topTracks} />
+        </section>
+
+        {/* Breath/Wellness Analytics Section */}
+        <section className="mb-6">
+          <h2 className="text-lg font-medium text-foreground mb-4 flex items-center gap-2">
+            <Brain className="w-5 h-5 text-orange-400" />
+            Bem-estar nas Pausas
+          </h2>
+          <BreathAnalytics stats={breathStats} />
         </section>
 
         {/* Tags section with charts */}

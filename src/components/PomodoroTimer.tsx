@@ -8,6 +8,7 @@ import { TimerDisplay } from "./TimerDisplay";
 import { ControlButtons } from "./ControlButtons";
 import { TagSelector, Tag } from "./TagSelector";
 import { DiveTagSelector } from "./DiveTagSelector";
+import { BreathTagSelector, BreathTag } from "./BreathTagSelector";
 import { PhasePopup } from "./PhasePopup";
 import { RatingPopup } from "./RatingPopup";
 import { NowPlaying } from "./NowPlaying";
@@ -44,6 +45,7 @@ export function PomodoroTimer() {
   const [showOverfocusPopup, setShowOverfocusPopup] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [diveTags, setDiveTags] = useState<Tag[]>([]);
+  const [breathTags, setBreathTags] = useState<BreathTag[]>([]);
   const [diveNotes, setDiveNotes] = useState('');
   const [lastBreathCycleId, setLastBreathCycleId] = useState<string | null>(null);
   
@@ -87,6 +89,7 @@ export function PomodoroTimer() {
     if (startTimeRef.current) {
       const immersionTagNames = selectedTags.map(t => t.name).join(', ');
       const diveTagNames = diveTags.map(t => t.name).join(', ');
+      const breathTagNames = breathTags.map(t => t.name).join(', ');
       
       let tagValue: string | undefined;
       let actionsValue: string | undefined;
@@ -96,6 +99,8 @@ export function PomodoroTimer() {
       } else if (currentPhase === 'dive') {
         tagValue = diveTagNames;
         actionsValue = diveNotes;
+      } else if (currentPhase === 'breath') {
+        tagValue = breathTagNames;
       }
 
       const spotifyTrackName = currentTrack?.name;
@@ -117,7 +122,7 @@ export function PomodoroTimer() {
       return cycleId;
     }
     return null;
-  }, [currentPhase, selectedTags, diveTags, diveNotes, currentTrack]);
+  }, [currentPhase, selectedTags, diveTags, breathTags, diveNotes, currentTrack]);
 
   const startPhase = useCallback((phase: Phase) => {
     const time = getPhaseTime(phase);
@@ -412,9 +417,15 @@ export function PomodoroTimer() {
             />
           )}
           {currentPhase === 'breath' && (
-            <div className="text-center py-4">
-              <span className="text-3xl">🌊</span>
-              <p className="mt-2 text-foreground/80 font-medium">Momento de descanso</p>
+            <div className="space-y-4">
+              <div className="text-center">
+                <span className="text-3xl">🌊</span>
+                <p className="mt-2 text-foreground/80 font-medium">Momento de descanso</p>
+              </div>
+              <BreathTagSelector
+                selectedTags={breathTags}
+                onTagsChange={setBreathTags}
+              />
             </div>
           )}
         </div>
