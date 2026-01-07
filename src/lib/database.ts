@@ -670,3 +670,41 @@ export async function getTopTracksByRatingAsync(startDate?: Date, endDate?: Date
     return [];
   }
 }
+
+// Breath tag stats interface
+export interface BreathTagStats {
+  tag: string;
+  count: number;
+  percentage: number;
+}
+
+// Get breath tag statistics (for mental patterns/wellness analysis)
+export async function getBreathTagStatsAsync(startDate?: Date, endDate?: Date): Promise<BreathTagStats[]> {
+  try {
+    const cycles = await getCyclesAsync(startDate, endDate);
+    const breathCycles = cycles.filter(c => c.phase === 'breath' && c.completed && c.tag);
+    
+    const tagMap = new Map<string, number>();
+    let total = 0;
+    
+    for (const cycle of breathCycles) {
+      // Tags might be comma-separated
+      const tags = (cycle.tag || '').split(',').map(t => t.trim()).filter(Boolean);
+      for (const tag of tags) {
+        tagMap.set(tag, (tagMap.get(tag) || 0) + 1);
+        total += 1;
+      }
+    }
+    
+    return Array.from(tagMap.entries())
+      .map(([tag, count]) => ({
+        tag,
+        count,
+        percentage: total > 0 ? (count / total) * 100 : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+  } catch (e) {
+    console.error('Error getting breath tag stats:', e);
+    return [];
+  }
+}

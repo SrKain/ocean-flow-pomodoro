@@ -1,32 +1,33 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Check } from 'lucide-react';
+import { Plus, X, Check, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-export interface Tag {
+export interface BreathTag {
   id: string;
   name: string;
   color: string;
 }
 
-interface TagSelectorProps {
-  selectedTags: Tag[];
-  onTagsChange: (tags: Tag[]) => void;
+interface BreathTagSelectorProps {
+  selectedTags: BreathTag[];
+  onTagsChange: (tags: BreathTag[]) => void;
   className?: string;
 }
 
-const defaultColors = [
-  'hsl(200, 80%, 55%)',  // Ocean blue
-  'hsl(160, 70%, 45%)',  // Teal
-  'hsl(280, 65%, 55%)',  // Purple
-  'hsl(340, 75%, 55%)',  // Pink
+// Warm, calming colors for breath/rest tags
+const breathColors = [
+  'hsl(25, 80%, 55%)',   // Warm orange
   'hsl(45, 85%, 55%)',   // Gold
-  'hsl(15, 80%, 55%)',   // Orange
+  'hsl(340, 65%, 60%)',  // Soft pink
+  'hsl(280, 55%, 55%)',  // Lavender
+  'hsl(180, 50%, 50%)',  // Teal
+  'hsl(120, 40%, 50%)',  // Sage green
 ];
 
-export function TagSelector({ selectedTags, onTagsChange, className }: TagSelectorProps) {
-  const [tags, setTags] = useState<Tag[]>([]);
+export function BreathTagSelector({ selectedTags, onTagsChange, className }: BreathTagSelectorProps) {
+  const [tags, setTags] = useState<BreathTag[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -46,7 +47,7 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
         .from('tags')
         .select('*')
         .eq('user_id', user.id)
-        .eq('tag_type', 'focus')
+        .eq('tag_type', 'breath')
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -54,10 +55,10 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
       setTags(data?.map(t => ({
         id: t.id,
         name: t.name,
-        color: t.color || defaultColors[0]
+        color: t.color || breathColors[0]
       })) || []);
     } catch (e) {
-      console.error('Error loading tags:', e);
+      console.error('Error loading breath tags:', e);
     } finally {
       setLoading(false);
     }
@@ -66,12 +67,12 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
   const createTag = async () => {
     if (!newTagName.trim() || !user) return;
     
-    const colorIndex = tags.length % defaultColors.length;
+    const colorIndex = tags.length % breathColors.length;
     const newTag = {
       user_id: user.id,
       name: newTagName.trim(),
-      color: defaultColors[colorIndex],
-      tag_type: 'focus'
+      color: breathColors[colorIndex],
+      tag_type: 'breath'
     };
 
     try {
@@ -83,10 +84,10 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
 
       if (error) throw error;
       
-      const tag: Tag = {
+      const tag: BreathTag = {
         id: data.id,
         name: data.name,
-        color: data.color || defaultColors[0]
+        color: data.color || breathColors[0]
       };
       
       setTags([...tags, tag]);
@@ -94,11 +95,11 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
       setNewTagName('');
       setIsCreating(false);
     } catch (e) {
-      console.error('Error creating tag:', e);
+      console.error('Error creating breath tag:', e);
     }
   };
 
-  const toggleTag = (tag: Tag) => {
+  const toggleTag = (tag: BreathTag) => {
     const isSelected = selectedTags.some(t => t.id === tag.id);
     if (isSelected) {
       onTagsChange(selectedTags.filter(t => t.id !== tag.id));
@@ -119,7 +120,7 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
       setTags(tags.filter(t => t.id !== tagId));
       onTagsChange(selectedTags.filter(t => t.id !== tagId));
     } catch (e) {
-      console.error('Error deleting tag:', e);
+      console.error('Error deleting breath tag:', e);
     }
   };
 
@@ -131,7 +132,13 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
 
   return (
     <div className={cn("space-y-3", className)}>
-      {/* Selected/Available Tags */}
+      {/* Header */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Brain className="w-4 h-4" />
+        <span>Como você está se sentindo?</span>
+      </div>
+
+      {/* Tags */}
       <div className="flex flex-wrap gap-2">
         {tags.map((tag) => {
           const isSelected = selectedTags.some(t => t.id === tag.id);
@@ -148,8 +155,8 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
                   : "border-white/10 hover:border-white/20 opacity-70 hover:opacity-100"
               )}
               style={{
-                backgroundColor: isSelected ? `${tag.color}30` : 'hsla(210, 40%, 20%, 0.4)',
-                color: isSelected ? 'white' : 'hsl(200, 20%, 80%)'
+                backgroundColor: isSelected ? `${tag.color}30` : 'hsla(30, 40%, 20%, 0.4)',
+                color: isSelected ? 'white' : 'hsl(30, 20%, 80%)'
               }}
             >
               <span 
@@ -181,7 +188,7 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
           <button
             type="button"
             onClick={() => setIsCreating(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border border-dashed border-white/20 text-muted-foreground hover:border-primary/50 hover:text-primary"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border border-dashed border-orange-400/30 text-muted-foreground hover:border-orange-400/50 hover:text-orange-300"
           >
             <Plus className="w-4 h-4" />
             Nova tag
@@ -205,15 +212,15 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
                 setNewTagName('');
               }
             }}
-            placeholder="Nome da tag"
+            placeholder="Ex: relaxado, energizado, ansioso..."
             autoFocus
-            className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 text-sm"
+            className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-orange-400/50 text-sm"
           />
           <button
             type="button"
             onClick={createTag}
             disabled={!newTagName.trim()}
-            className="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="p-2 rounded-lg bg-orange-500/80 text-white hover:bg-orange-500 disabled:opacity-50 transition-colors"
           >
             <Check className="w-4 h-4" />
           </button>
@@ -232,7 +239,7 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
 
       {tags.length === 0 && !isCreating && (
         <p className="text-xs text-muted-foreground text-center py-2">
-          Crie tags para organizar suas sessões de foco
+          Registre como você está durante a pausa para análise de bem-estar
         </p>
       )}
     </div>

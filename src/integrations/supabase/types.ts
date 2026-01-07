@@ -222,6 +222,7 @@ export type Database = {
           group_id: string | null
           id: string
           name: string
+          tag_type: string
           user_id: string
         }
         Insert: {
@@ -230,6 +231,7 @@ export type Database = {
           group_id?: string | null
           id?: string
           name: string
+          tag_type?: string
           user_id: string
         }
         Update: {
@@ -238,6 +240,7 @@ export type Database = {
           group_id?: string | null
           id?: string
           name?: string
+          tag_type?: string
           user_id?: string
         }
         Relationships: [
