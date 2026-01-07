@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Settings, BarChart3, LogOut, CheckCircle, Calendar, Minimize2, Tags } from "lucide-react";
+import { Settings, BarChart3, LogOut, CheckCircle, Calendar, Minimize2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Phase, getSettingsAsync, saveCycleRecordAsync, PomodoroSettings, updateCycleRatingAsync } from "@/lib/database";
+import { Phase, saveCycleRecordAsync, updateCycleRatingAsync } from "@/lib/database";
 import { PolarRing } from "./PolarRing";
 import { TimerDisplay } from "./TimerDisplay";
 import { ControlButtons } from "./ControlButtons";
@@ -13,13 +13,13 @@ import { RatingPopup } from "./RatingPopup";
 import { NowPlaying } from "./NowPlaying";
 import { MissionsPopup } from "./MissionsPopup";
 import { MissionsWidget } from "./MissionsWidget";
-import { PictureInPicture } from "./PictureInPicture";
 import { DocumentPictureInPicture, useDocumentPipSupport } from "./DocumentPictureInPicture";
+import { PictureInPicture } from "./PictureInPicture";
 import { OverfocusPopup } from "./OverfocusPopup";
-import { TagManagement } from "./TagManagement";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useAuth } from "@/hooks/useAuth";
 import { useSpotify } from "@/hooks/useSpotify";
+import { useSessionSync } from "@/hooks/useSessionSync";
 
 const phaseOrder: Phase[] = ['immersion', 'dive', 'breath'];
 
@@ -36,19 +36,15 @@ const phaseColors: Record<Phase, string> = {
 };
 
 export function PomodoroTimer() {
-  const [settings, setSettings] = useState<PomodoroSettings | null>(null);
-  const [currentPhase, setCurrentPhase] = useState<Phase>('immersion');
-  const [timeLeft, setTimeLeft] = useState(25 * 60);
-  const [totalTime, setTotalTime] = useState(25 * 60);
-  const [isRunning, setIsRunning] = useState(false);
+  const { session, settings, loading, updateSession } = useSessionSync();
   const [showPopup, setShowPopup] = useState(false);
   const [showRatingPopup, setShowRatingPopup] = useState(false);
   const [showMissionsPopup, setShowMissionsPopup] = useState(false);
   const [showPip, setShowPip] = useState(false);
+  const [showOverfocusPopup, setShowOverfocusPopup] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [diveTags, setDiveTags] = useState<Tag[]>([]);
   const [diveNotes, setDiveNotes] = useState('');
-  const [cycleCount, setCycleCount] = useState(0);
   const [lastBreathCycleId, setLastBreathCycleId] = useState<string | null>(null);
   
   const startTimeRef = useRef<string | null>(null);
@@ -57,18 +53,21 @@ export function PomodoroTimer() {
   const { signOut } = useAuth();
   const { currentTrack } = useSpotify();
   const navigate = useNavigate();
+  
+  // Check if Document PIP is supported, fallback to regular PIP
+  const documentPipSupported = useDocumentPipSupport();
 
   // Keep screen on while timer is running
-  useWakeLock(isRunning);
+  useWakeLock(session?.is_running || false);
 
-  // Load settings on mount
-  useEffect(() => {
-    getSettingsAsync().then((s) => {
-      setSettings(s);
-      setTimeLeft(s.immersionMinutes * 60);
-      setTotalTime(s.immersionMinutes * 60);
-    });
-  }, []);
+  // Derived state from session
+  const currentPhase = (session?.current_phase as Phase) || 'immersion';
+  const timeLeft = session?.time_left || 0;
+  const totalTime = session?.total_time || (settings?.immersionMinutes || 25) * 60;
+  const isRunning = session?.is_running || false;
+  const cycleCount = session?.cycle_count || 0;
+  const isOvertime = session?.is_overtime || false;
+  const extraTime = session?.extra_time_seconds || 0;
 
   const getPhaseTime = useCallback((phase: Phase) => {
     if (!settings) return 25 * 60;
@@ -89,7 +88,6 @@ export function PomodoroTimer() {
       const immersionTagNames = selectedTags.map(t => t.name).join(', ');
       const diveTagNames = diveTags.map(t => t.name).join(', ');
       
-      // For dive phase, combine tags and notes
       let tagValue: string | undefined;
       let actionsValue: string | undefined;
       
@@ -100,7 +98,6 @@ export function PomodoroTimer() {
         actionsValue = diveNotes;
       }
 
-      // Get current spotify track info
       const spotifyTrackName = currentTrack?.name;
       const spotifyArtist = currentTrack?.artist;
       const spotifyAlbum = currentTrack?.album;
@@ -124,20 +121,42 @@ export function PomodoroTimer() {
 
   const startPhase = useCallback((phase: Phase) => {
     const time = getPhaseTime(phase);
-    setCurrentPhase(phase);
-    setTimeLeft(time);
-    setTotalTime(time);
     startTimeRef.current = new Date().toISOString();
-    setIsRunning(true);
-    setShowPopup(false);
     
-    if (phase === 'immersion') {
-      setCycleCount(prev => prev + 1);
-    }
-  }, [getPhaseTime]);
+    updateSession({
+      current_phase: phase,
+      time_left: time,
+      total_time: time,
+      is_running: true,
+      started_at: startTimeRef.current,
+      is_overtime: false,
+      extra_time_seconds: 0,
+      cycle_count: phase === 'immersion' ? cycleCount + 1 : cycleCount,
+    });
+    
+    setShowPopup(false);
+  }, [getPhaseTime, updateSession, cycleCount]);
 
   const handlePhaseComplete = useCallback(async () => {
-    setIsRunning(false);
+    // Start overtime instead of stopping
+    updateSession({
+      is_overtime: true,
+      is_running: true,
+      extra_time_seconds: 0,
+    });
+    
+    // Show overfocus popup
+    setShowOverfocusPopup(true);
+  }, [updateSession]);
+
+  const handleOverfocusDecision = useCallback(async (includeExtraTime: boolean) => {
+    setShowOverfocusPopup(false);
+    
+    updateSession({
+      is_running: false,
+      is_overtime: false,
+    });
+    
     const cycleId = await saveCycle(true);
     
     // If breath phase completed, show rating popup
@@ -149,23 +168,21 @@ export function PomodoroTimer() {
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
     setShowPopup(true);
-  }, [currentPhase, saveCycle]);
+  }, [currentPhase, saveCycle, updateSession]);
 
   const handleSkip = useCallback(async () => {
-    setIsRunning(false);
+    updateSession({ is_running: false, is_overtime: false });
     await saveCycle(false);
     
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
     setShowPopup(true);
-  }, [currentPhase, saveCycle]);
+  }, [currentPhase, saveCycle, updateSession]);
 
-  // Complete cycle button - finishes current phase and shows popup
   const handleCompleteCycle = useCallback(async () => {
-    setIsRunning(false);
+    updateSession({ is_running: false, is_overtime: false });
     const cycleId = await saveCycle(true);
     
-    // If breath phase completed, show rating popup
     if (currentPhase === 'breath' && cycleId) {
       setLastBreathCycleId(cycleId);
       setShowRatingPopup(true);
@@ -174,14 +191,17 @@ export function PomodoroTimer() {
     const next = getNextPhase(currentPhase);
     pendingPhaseRef.current = next;
     setShowPopup(true);
-  }, [currentPhase, saveCycle]);
+  }, [currentPhase, saveCycle, updateSession]);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     if (!isRunning && !startTimeRef.current) {
       startTimeRef.current = new Date().toISOString();
     }
-    setIsRunning(prev => !prev);
-  };
+    updateSession({ 
+      is_running: !isRunning,
+      started_at: !isRunning ? new Date().toISOString() : session?.started_at,
+    });
+  }, [isRunning, updateSession, session?.started_at]);
 
   const handleContinue = () => {
     if (pendingPhaseRef.current) {
@@ -212,35 +232,44 @@ export function PomodoroTimer() {
     navigate('/auth');
   };
 
+  const handleTimeChange = useCallback((newTimeSeconds: number) => {
+    updateSession({
+      time_left: newTimeSeconds,
+      total_time: newTimeSeconds,
+    });
+  }, [updateSession]);
+
   // Timer countdown
   useEffect(() => {
-    if (!isRunning || timeLeft <= 0) return;
+    if (!isRunning) return;
 
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          handlePhaseComplete();
-          return 0;
-        }
-        return prev - 1;
-      });
+      if (isOvertime) {
+        updateSession({ extra_time_seconds: extraTime + 1 });
+      } else if (timeLeft <= 1) {
+        handlePhaseComplete();
+      } else {
+        updateSession({ time_left: timeLeft - 1 });
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning, timeLeft, handlePhaseComplete]);
+  }, [isRunning, timeLeft, isOvertime, extraTime, handlePhaseComplete, updateSession]);
 
-  const minutes = Math.floor(timeLeft / 60);
-  const seconds = timeLeft % 60;
-  const progress = 1 - (timeLeft / totalTime);
+  const displayMinutes = isOvertime 
+    ? Math.floor(extraTime / 60) 
+    : Math.floor(timeLeft / 60);
+  const displaySeconds = isOvertime 
+    ? extraTime % 60 
+    : timeLeft % 60;
+  const progress = isOvertime ? 1 : 1 - (timeLeft / totalTime);
 
   // Calculate background style based on phase and progress
   const getBackgroundStyle = () => {
     if (currentPhase === 'dive') {
-      // Pure black for OLED, but lighten in the last 50%
       if (progress >= 0.5) {
-        // Last 50%: gradually lighten from black to dark blue
-        const lightenProgress = (progress - 0.5) / 0.5; // 0 to 1 in last half
-        const lightness = lightenProgress * 15; // 0% to 15%
+        const lightenProgress = (progress - 0.5) / 0.5;
+        const lightness = lightenProgress * 15;
         return {
           background: `linear-gradient(180deg, hsl(210, 50%, ${lightness}%) 0%, hsl(215, 60%, ${lightness * 0.7}%) 100%)`
         };
@@ -249,15 +278,13 @@ export function PomodoroTimer() {
     }
     
     if (currentPhase === 'immersion') {
-      // Light blue that darkens over time
-      const lightness = 60 - (progress * 35); // From 60% to 25%
+      const lightness = 60 - (progress * 35);
       return {
         background: `linear-gradient(180deg, hsl(195, 85%, ${lightness}%) 0%, hsl(215, 65%, ${lightness - 15}%) 100%)`
       };
     }
     
     if (currentPhase === 'breath') {
-      // Dark → Light → Dark cycle
       let lightness;
       if (progress <= 0.5) {
         lightness = 35 + (progress * 2 * 30);
@@ -272,7 +299,7 @@ export function PomodoroTimer() {
     return {};
   };
 
-  if (!settings) {
+  if (loading || !settings) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-foreground">Carregando...</div>
@@ -334,13 +361,18 @@ export function PomodoroTimer() {
           <MissionsWidget onClick={() => setShowMissionsPopup(true)} />
         </div>
 
+        {/* Now Playing - Above timer */}
+        <div className="mb-4">
+          <NowPlaying />
+        </div>
+
         {/* Phase indicator */}
-        <div className="mb-8 animate-slide-up">
+        <div className="mb-4 animate-slide-up">
           <span className={cn(
             "text-lg font-medium tracking-wide uppercase",
-            currentPhase === 'breath' ? 'text-foreground/90' : 'text-foreground/80'
+            isOvertime ? 'text-yellow-400' : (currentPhase === 'breath' ? 'text-foreground/90' : 'text-foreground/80')
           )}>
-            {phaseNames[currentPhase]}
+            {isOvertime ? '🔥 Overfocus' : phaseNames[currentPhase]}
           </span>
         </div>
 
@@ -350,13 +382,15 @@ export function PomodoroTimer() {
             progress={progress} 
             size={300}
             strokeWidth={8}
-            color={phaseColors[currentPhase]}
+            color={isOvertime ? 'hsl(45, 100%, 55%)' : phaseColors[currentPhase]}
           />
           <div className="absolute inset-0 flex items-center justify-center">
             <TimerDisplay 
-              minutes={minutes} 
-              seconds={seconds}
+              minutes={displayMinutes} 
+              seconds={displaySeconds}
               phase={currentPhase}
+              onTimeChange={!isRunning && !isOvertime ? handleTimeChange : undefined}
+              editable={!isRunning && !isOvertime}
             />
           </div>
         </div>
@@ -394,7 +428,7 @@ export function PomodoroTimer() {
           />
           
           {/* Complete Cycle Button */}
-          {isRunning && (
+          {isRunning && !isOvertime && (
             <button
               onClick={handleCompleteCycle}
               className="flex items-center gap-2 px-6 py-3 rounded-xl glass-button text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
@@ -405,11 +439,6 @@ export function PomodoroTimer() {
           )}
         </div>
 
-        {/* Now Playing - Spotify */}
-        <div className="mt-6">
-          <NowPlaying />
-        </div>
-
         {/* Phase Popup */}
         <PhasePopup
           isOpen={showPopup}
@@ -418,11 +447,19 @@ export function PomodoroTimer() {
           onWait={handleWait}
         />
 
-        {/* Rating Popup - shows after completing breath phase */}
+        {/* Rating Popup */}
         <RatingPopup
           isOpen={showRatingPopup}
           onSubmit={handleRatingSubmit}
           onSkip={handleRatingSkip}
+        />
+
+        {/* Overfocus Popup */}
+        <OverfocusPopup
+          isOpen={showOverfocusPopup}
+          extraTimeSeconds={extraTime}
+          onInclude={() => handleOverfocusDecision(true)}
+          onDiscard={() => handleOverfocusDecision(false)}
         />
 
         {/* Missions Popup */}
@@ -431,16 +468,31 @@ export function PomodoroTimer() {
           onClose={() => setShowMissionsPopup(false)}
         />
 
-        {/* Picture in Picture */}
-        <PictureInPicture
-          isOpen={showPip}
-          onClose={() => setShowPip(false)}
-          timeLeft={timeLeft}
-          totalTime={totalTime}
-          currentPhase={currentPhase}
-          isRunning={isRunning}
-          onPlayPause={handlePlayPause}
-        />
+        {/* Picture in Picture - Document PIP or fallback */}
+        {documentPipSupported ? (
+          <DocumentPictureInPicture
+            isOpen={showPip}
+            onClose={() => setShowPip(false)}
+            timeLeft={timeLeft}
+            totalTime={totalTime}
+            currentPhase={currentPhase}
+            isRunning={isRunning}
+            isOvertime={isOvertime}
+            extraTime={extraTime}
+            onPlayPause={handlePlayPause}
+            onSkip={handleSkip}
+          />
+        ) : (
+          <PictureInPicture
+            isOpen={showPip}
+            onClose={() => setShowPip(false)}
+            timeLeft={timeLeft}
+            totalTime={totalTime}
+            currentPhase={currentPhase}
+            isRunning={isRunning}
+            onPlayPause={handlePlayPause}
+          />
+        )}
       </div>
     </div>
   );
