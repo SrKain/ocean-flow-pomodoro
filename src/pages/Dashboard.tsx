@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Clock, Target, Zap, Calendar, BarChart2, PieChart as PieChartIcon, TrendingUp, Star, Music, Brain } from "lucide-react";
+import { ArrowLeft, Clock, Target, Zap, Calendar, BarChart2, PieChart as PieChartIcon, TrendingUp, Star, Music, Brain, Settings2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { 
   getTagStatsAsync, 
@@ -20,6 +20,7 @@ import {
 import { RatingAnalytics } from "@/components/RatingAnalytics";
 import { MusicAnalytics } from "@/components/MusicAnalytics";
 import { BreathAnalytics } from "@/components/BreathAnalytics";
+import { TagManagement } from "@/components/TagManagement";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -117,9 +118,10 @@ export default function Dashboard() {
   const [musicStats, setMusicStats] = useState<MusicFocusStats[]>([]);
   const [topTracks, setTopTracks] = useState<{ track: string; artist: string; avgRating: number; cycleCount: number }[]>([]);
   const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
-  const [loading, setLoading] = useState(true);
+const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<PeriodFilter>(7);
   const [chartType, setChartType] = useState<ChartType>('bar');
+  const [tagManagementOpen, setTagManagementOpen] = useState(false);
 
   const dateRange = useMemo(() => {
     const endDate = endOfDay(new Date());
@@ -190,8 +192,18 @@ export default function Dashboard() {
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </Link>
-          <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-foreground flex-1">Dashboard</h1>
+          <button
+            onClick={() => setTagManagementOpen(true)}
+            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
+            aria-label="Gerenciar Tags"
+          >
+            <Settings2 className="w-5 h-5 text-foreground" />
+          </button>
         </div>
+
+        {/* Tag Management Modal */}
+        <TagManagement isOpen={tagManagementOpen} onClose={() => setTagManagementOpen(false)} />
 
         {/* Period Filter */}
         <div className="flex items-center gap-2 mb-6">
