@@ -269,34 +269,68 @@ export function PomodoroTimer() {
   const progress = isOvertime ? 1 : 1 - (timeLeft / totalTime);
 
   // Calculate background style based on phase and progress
+  // Mergulho: azul quase preto → laranja (respiração)
+  // Respiração: laranja → azul claro (imersão)
+  // Imersão: azul claro → azul quase preto (mergulho)
   const getBackgroundStyle = () => {
     if (currentPhase === 'dive') {
-      if (progress >= 0.5) {
-        const lightenProgress = (progress - 0.5) / 0.5;
-        const lightness = lightenProgress * 15;
-        return {
-          background: `linear-gradient(180deg, hsl(210, 50%, ${lightness}%) 0%, hsl(215, 60%, ${lightness * 0.7}%) 100%)`
-        };
-      }
-      return { background: '#000000' };
-    }
-    
-    if (currentPhase === 'immersion') {
-      const lightness = 60 - (progress * 35);
+      // Start: azul quase preto (hsl 215, 50%, 5%)
+      // End: laranja (hsl 25, 80%, 50%)
+      const startHue = 215;
+      const endHue = 25;
+      const startSat = 50;
+      const endSat = 80;
+      const startLight = 5;
+      const endLight = 50;
+      
+      // Interpolate hue (going through 0/360)
+      const hue = startHue + progress * ((endHue + 360 - startHue) % 360 > 180 
+        ? endHue - startHue 
+        : (endHue + 360 - startHue));
+      const normalizedHue = hue > 360 ? hue - 360 : (hue < 0 ? hue + 360 : hue);
+      const sat = startSat + progress * (endSat - startSat);
+      const light = startLight + progress * (endLight - startLight);
+      
       return {
-        background: `linear-gradient(180deg, hsl(195, 85%, ${lightness}%) 0%, hsl(215, 65%, ${lightness - 15}%) 100%)`
+        background: `linear-gradient(180deg, hsl(${normalizedHue}, ${sat}%, ${light}%) 0%, hsl(${normalizedHue}, ${sat * 0.9}%, ${light * 0.8}%) 100%)`
       };
     }
     
     if (currentPhase === 'breath') {
-      let lightness;
-      if (progress <= 0.5) {
-        lightness = 35 + (progress * 2 * 30);
-      } else {
-        lightness = 65 - ((progress - 0.5) * 2 * 30);
-      }
+      // Start: laranja (hsl 25, 80%, 50%)
+      // End: azul claro (hsl 195, 85%, 60%)
+      const startHue = 25;
+      const endHue = 195;
+      const startSat = 80;
+      const endSat = 85;
+      const startLight = 50;
+      const endLight = 60;
+      
+      const hue = startHue + progress * (endHue - startHue);
+      const sat = startSat + progress * (endSat - startSat);
+      const light = startLight + progress * (endLight - startLight);
+      
       return {
-        background: `linear-gradient(180deg, hsl(30, 80%, ${lightness}%) 0%, hsl(25, 70%, ${lightness - 10}%) 100%)`
+        background: `linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${light * 0.85}%) 100%)`
+      };
+    }
+    
+    if (currentPhase === 'immersion') {
+      // Start: azul claro (hsl 195, 85%, 60%)
+      // End: azul quase preto (hsl 215, 50%, 5%)
+      const startHue = 195;
+      const endHue = 215;
+      const startSat = 85;
+      const endSat = 50;
+      const startLight = 60;
+      const endLight = 5;
+      
+      const hue = startHue + progress * (endHue - startHue);
+      const sat = startSat + progress * (endSat - startSat);
+      const light = startLight + progress * (endLight - startLight);
+      
+      return {
+        background: `linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${light * 0.8}%) 100%)`
       };
     }
     
