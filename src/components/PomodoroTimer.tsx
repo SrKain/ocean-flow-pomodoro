@@ -275,24 +275,14 @@ export function PomodoroTimer() {
   const getBackgroundStyle = () => {
     if (currentPhase === 'dive') {
       // Start: azul quase preto (hsl 215, 50%, 5%)
-      // End: laranja (hsl 25, 80%, 50%)
-      const startHue = 215;
-      const endHue = 25;
-      const startSat = 50;
-      const endSat = 80;
-      const startLight = 5;
-      const endLight = 50;
-      
-      // Interpolate hue (going through 0/360)
-      const hue = startHue + progress * ((endHue + 360 - startHue) % 360 > 180 
-        ? endHue - startHue 
-        : (endHue + 360 - startHue));
-      const normalizedHue = hue > 360 ? hue - 360 : (hue < 0 ? hue + 360 : hue);
-      const sat = startSat + progress * (endSat - startSat);
-      const light = startLight + progress * (endLight - startLight);
+      // End: laranja (hsl 30, 80%, 50%)
+      // Caminho: azul → ciano → verde → amarelo → laranja (sentido anti-horário)
+      const hue = 215 - progress * 185; // 215 → 30
+      const sat = 50 + progress * 30; // 50% → 80%
+      const light = 5 + progress * 45; // 5% → 50%
       
       return {
-        background: `linear-gradient(180deg, hsl(${normalizedHue}, ${sat}%, ${light}%) 0%, hsl(${normalizedHue}, ${sat * 0.9}%, ${light * 0.8}%) 100%)`
+        background: `linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${light * 0.8}%) 100%)`
       };
     }
     
