@@ -268,63 +268,71 @@ export function PomodoroTimer() {
     : timeLeft % 60;
   const progress = isOvertime ? 1 : 1 - (timeLeft / totalTime);
 
-  // Calculate background style based on phase and progress
-  // Mergulho: azul quase preto → laranja (respiração)
-  // Respiração: laranja → azul claro (imersão)
-  // Imersão: azul claro → azul quase preto (mergulho)
-  const getBackgroundStyle = () => {
+  // Easing function for smoother color transitions
+  const easeInOutCubic = (t: number): number => {
+    return t < 0.5 
+      ? 4 * t * t * t 
+      : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  };
+
+  // Calculate phase colors based on progress (with easing)
+  const getPhaseColors = () => {
+    const easedProgress = easeInOutCubic(progress);
+    
     if (currentPhase === 'dive') {
       // Start: azul quase preto (hsl 215, 50%, 5%)
       // End: laranja (hsl 30, 80%, 50%)
-      // Caminho: azul → ciano → verde → amarelo → laranja (sentido anti-horário)
-      const hue = 215 - progress * 185; // 215 → 30
-      const sat = 50 + progress * 30; // 50% → 80%
-      const light = 5 + progress * 45; // 5% → 50%
-      
-      return {
-        background: `linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${light * 0.8}%) 100%)`
-      };
+      const hue = 215 - easedProgress * 185; // 215 → 30
+      const sat = 50 + easedProgress * 30; // 50% → 80%
+      const light = 5 + easedProgress * 45; // 5% → 50%
+      return { hue, sat, light };
     }
     
     if (currentPhase === 'breath') {
-      // Start: laranja (hsl 25, 80%, 50%)
+      // Start: laranja (hsl 30, 80%, 50%)
       // End: azul claro (hsl 195, 85%, 60%)
-      const startHue = 25;
-      const endHue = 195;
-      const startSat = 80;
-      const endSat = 85;
-      const startLight = 50;
-      const endLight = 60;
-      
-      const hue = startHue + progress * (endHue - startHue);
-      const sat = startSat + progress * (endSat - startSat);
-      const light = startLight + progress * (endLight - startLight);
-      
-      return {
-        background: `linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${light * 0.85}%) 100%)`
-      };
+      const hue = 30 + easedProgress * 165; // 30 → 195
+      const sat = 80 + easedProgress * 5; // 80% → 85%
+      const light = 50 + easedProgress * 10; // 50% → 60%
+      return { hue, sat, light };
     }
     
     if (currentPhase === 'immersion') {
       // Start: azul claro (hsl 195, 85%, 60%)
       // End: azul quase preto (hsl 215, 50%, 5%)
-      const startHue = 195;
-      const endHue = 215;
-      const startSat = 85;
-      const endSat = 50;
-      const startLight = 60;
-      const endLight = 5;
-      
-      const hue = startHue + progress * (endHue - startHue);
-      const sat = startSat + progress * (endSat - startSat);
-      const light = startLight + progress * (endLight - startLight);
-      
-      return {
-        background: `linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${light * 0.8}%) 100%)`
-      };
+      const hue = 195 + easedProgress * 20; // 195 → 215
+      const sat = 85 - easedProgress * 35; // 85% → 50%
+      const light = 60 - easedProgress * 55; // 60% → 5%
+      return { hue, sat, light };
     }
     
-    return {};
+    return { hue: 215, sat: 50, light: 5 };
+  };
+
+  // Get timer text color based on background (contrasting)
+  const getTimerColor = () => {
+    const { hue, sat, light } = getPhaseColors();
+    
+    // For dark backgrounds (light < 30), use bright contrasting color
+    // For bright backgrounds (light >= 30), use dark contrasting color
+    if (light < 30) {
+      // Light text for dark backgrounds - use complementary bright color
+      const textLight = Math.min(85, light + 60);
+      return `hsl(${hue}, ${sat * 0.8}%, ${textLight}%)`;
+    } else {
+      // Dark text for bright backgrounds
+      const textLight = Math.max(15, light - 35);
+      return `hsl(${hue}, ${sat * 0.9}%, ${textLight}%)`;
+    }
+  };
+
+  // Calculate background style based on phase and progress
+  const getBackgroundStyle = () => {
+    const { hue, sat, light } = getPhaseColors();
+    
+    return {
+      background: `linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${Math.max(3, light * 0.8)}%) 100%)`
+    };
   };
 
   if (loading || !settings) {
@@ -371,6 +379,7 @@ export function PomodoroTimer() {
                   onTimeChange={!isRunning && !isOvertime ? handleTimeChange : undefined}
                   editable={!isRunning && !isOvertime}
                   compact
+                  dynamicColor={isOvertime ? undefined : getTimerColor()}
                 />
               </div>
             </div>
@@ -619,6 +628,7 @@ export function PomodoroTimer() {
               phase={currentPhase}
               onTimeChange={!isRunning && !isOvertime ? handleTimeChange : undefined}
               editable={!isRunning && !isOvertime}
+              dynamicColor={isOvertime ? undefined : getTimerColor()}
             />
           </div>
         </div>
