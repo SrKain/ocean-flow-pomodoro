@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Clock, Target, Zap, Calendar, BarChart2, PieChart as PieChartIcon, TrendingUp, Star, Music, Brain, Settings2 } from "lucide-react";
+import { ArrowLeft, Clock, Target, Zap, Calendar, BarChart2, PieChart as PieChartIcon, TrendingUp, Star, Music, Brain, Settings2, FolderOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import { 
   getTagStatsAsync, 
@@ -11,15 +11,18 @@ import {
   getMusicFocusStatsAsync,
   getTopTracksByRatingAsync,
   getBreathTagStatsAsync,
+  getTagGroupStatsAsync,
   CycleRecord,
   TagStats,
   RatingStats,
   MusicFocusStats,
-  BreathTagStats
+  BreathTagStats,
+  TagGroupStats
 } from "@/lib/database";
 import { RatingAnalytics } from "@/components/RatingAnalytics";
 import { MusicAnalytics } from "@/components/MusicAnalytics";
 import { BreathAnalytics } from "@/components/BreathAnalytics";
+import { GroupAnalytics } from "@/components/GroupAnalytics";
 import { TagManagement } from "@/components/TagManagement";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -117,8 +120,9 @@ export default function Dashboard() {
   const [ratingStats, setRatingStats] = useState<RatingStats>({ averageRating: 0, totalRated: 0, distribution: [] });
   const [musicStats, setMusicStats] = useState<MusicFocusStats[]>([]);
   const [topTracks, setTopTracks] = useState<{ track: string; artist: string; avgRating: number; cycleCount: number }[]>([]);
-  const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
-const [loading, setLoading] = useState(true);
+const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
+  const [groupStats, setGroupStats] = useState<TagGroupStats[]>([]);
+  const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<PeriodFilter>(7);
   const [chartType, setChartType] = useState<ChartType>('bar');
   const [tagManagementOpen, setTagManagementOpen] = useState(false);
@@ -142,8 +146,9 @@ const [loading, setLoading] = useState(true);
       getRatingStatsAsync(startDate, endDate),
       getMusicFocusStatsAsync(startDate, endDate),
       getTopTracksByRatingAsync(startDate, endDate),
-      getBreathTagStatsAsync(startDate, endDate)
-    ]).then(([stats, cycles, total, minutes, daily, ratings, music, tracks, breath]) => {
+      getBreathTagStatsAsync(startDate, endDate),
+      getTagGroupStatsAsync(startDate, endDate)
+    ]).then(([stats, cycles, total, minutes, daily, ratings, music, tracks, breath, groups]) => {
       setTagStats(stats);
       setRecentCycles(cycles);
       setTotalCycles(total);
@@ -153,6 +158,7 @@ const [loading, setLoading] = useState(true);
       setMusicStats(music);
       setTopTracks(tracks);
       setBreathStats(breath);
+      setGroupStats(groups);
       setLoading(false);
     });
   }, [dateRange]);
@@ -316,6 +322,15 @@ const [loading, setLoading] = useState(true);
             Música × Qualidade de Foco
           </h2>
           <MusicAnalytics stats={musicStats} topTracks={topTracks} />
+        </section>
+
+        {/* Group Analytics Section */}
+        <section className="mb-6">
+          <h2 className="text-lg font-medium text-foreground mb-4 flex items-center gap-2">
+            <FolderOpen className="w-5 h-5 text-primary" />
+            Por Grupo de Tags
+          </h2>
+          <GroupAnalytics stats={groupStats} />
         </section>
 
         {/* Breath/Wellness Analytics Section */}
