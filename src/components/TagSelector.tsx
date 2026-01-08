@@ -14,6 +14,7 @@ interface TagSelectorProps {
   selectedTags: Tag[];
   onTagsChange: (tags: Tag[]) => void;
   className?: string;
+  compact?: boolean;
 }
 
 const defaultColors = [
@@ -25,7 +26,7 @@ const defaultColors = [
   'hsl(15, 80%, 55%)',   // Orange
 ];
 
-export function TagSelector({ selectedTags, onTagsChange, className }: TagSelectorProps) {
+export function TagSelector({ selectedTags, onTagsChange, className, compact = false }: TagSelectorProps) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [newTagName, setNewTagName] = useState('');
@@ -130,7 +131,7 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
   }
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn(compact ? "space-y-2" : "space-y-3", className)}>
       {/* Selected/Available Tags */}
       <div className="flex flex-wrap gap-2">
         {tags.map((tag) => {
@@ -141,8 +142,9 @@ export function TagSelector({ selectedTags, onTagsChange, className }: TagSelect
               type="button"
               onClick={() => toggleTag(tag)}
               className={cn(
-                "group relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200",
+                "group relative flex items-center gap-1.5 rounded-full font-medium transition-all duration-200",
                 "border backdrop-blur-sm",
+                compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm",
                 isSelected
                   ? "border-white/30 shadow-lg scale-105"
                   : "border-white/10 hover:border-white/20 opacity-70 hover:opacity-100"
