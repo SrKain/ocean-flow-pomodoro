@@ -21,6 +21,7 @@ import { useWakeLock } from "@/hooks/useWakeLock";
 import { useAuth } from "@/hooks/useAuth";
 import { useSpotify } from "@/hooks/useSpotify";
 import { useSessionSync } from "@/hooks/useSessionSync";
+import { useLandscapeMode } from "@/hooks/useLandscapeMode";
 
 const phaseOrder: Phase[] = ['immersion', 'dive', 'breath'];
 
@@ -55,6 +56,7 @@ export function PomodoroTimer() {
   const { signOut } = useAuth();
   const { currentTrack } = useSpotify();
   const navigate = useNavigate();
+  const { isLandscape } = useLandscapeMode();
   
   // Check if Document PIP is supported, fallback to regular PIP
   const documentPipSupported = useDocumentPipSupport();
@@ -143,14 +145,12 @@ export function PomodoroTimer() {
   }, [getPhaseTime, updateSession, cycleCount]);
 
   const handlePhaseComplete = useCallback(async () => {
-    // Start overtime instead of stopping
     updateSession({
       is_overtime: true,
       is_running: true,
       extra_time_seconds: 0,
     });
     
-    // Show overfocus popup
     setShowOverfocusPopup(true);
   }, [updateSession]);
 
@@ -164,7 +164,6 @@ export function PomodoroTimer() {
     
     const cycleId = await saveCycle(true);
     
-    // If breath phase completed, show rating popup
     if (currentPhase === 'breath' && cycleId) {
       setLastBreathCycleId(cycleId);
       setShowRatingPopup(true);
@@ -312,6 +311,206 @@ export function PomodoroTimer() {
     );
   }
 
+  // Landscape layout for mobile
+  if (isLandscape) {
+    return (
+      <div 
+        className="min-h-screen transition-all duration-1000 ease-in-out"
+        style={getBackgroundStyle()}
+      >
+        <div className="relative min-h-screen flex items-center justify-between px-6 py-4 z-10">
+          {/* Left side - Timer */}
+          <div className="flex flex-col items-center justify-center flex-1">
+            {/* Phase indicator */}
+            <div className="mb-2 animate-slide-up">
+              <span className={cn(
+                "text-base font-medium tracking-wide uppercase",
+                isOvertime ? 'text-yellow-400' : (currentPhase === 'breath' ? 'text-foreground/90' : 'text-foreground/80')
+              )}>
+                {isOvertime ? '🔥 Overfocus' : phaseNames[currentPhase]}
+              </span>
+            </div>
+
+            {/* Timer with Polar Ring */}
+            <div className="relative flex items-center justify-center mb-4">
+              <PolarRing 
+                progress={progress} 
+                size={200}
+                strokeWidth={6}
+                color={isOvertime ? 'hsl(45, 100%, 55%)' : phaseColors[currentPhase]}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <TimerDisplay 
+                  minutes={displayMinutes} 
+                  seconds={displaySeconds}
+                  phase={currentPhase}
+                  onTimeChange={!isRunning && !isOvertime ? handleTimeChange : undefined}
+                  editable={!isRunning && !isOvertime}
+                  compact
+                />
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex flex-col items-center gap-2">
+              <ControlButtons
+                isRunning={isRunning}
+                onPlayPause={handlePlayPause}
+                onSkip={handleSkip}
+                compact
+              />
+              
+              {isRunning && !isOvertime && (
+                <button
+                  onClick={handleCompleteCycle}
+                  className="flex items-center gap-1 px-4 py-2 rounded-lg glass-button text-xs font-medium text-foreground/80 hover:text-foreground transition-colors"
+                >
+                  <CheckCircle className="w-3 h-3" />
+                  Concluir
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Right side - Info Panel */}
+          <div className="flex flex-col items-center justify-center flex-1 gap-4 max-w-xs">
+            {/* Cycle counter */}
+            <div className="glass px-4 py-2 rounded-full">
+              <span className="text-sm text-muted-foreground">Ciclo </span>
+              <span className="text-foreground font-semibold">{cycleCount}</span>
+            </div>
+
+            {/* Now Playing */}
+            <NowPlaying compact />
+
+            {/* Phase-specific inputs */}
+            <div className="w-full animate-slide-up">
+              {currentPhase === 'immersion' && (
+                <TagSelector
+                  selectedTags={selectedTags}
+                  onTagsChange={setSelectedTags}
+                  compact
+                />
+              )}
+              {currentPhase === 'dive' && (
+                <DiveTagSelector
+                  selectedTags={diveTags}
+                  onTagsChange={setDiveTags}
+                  notes={diveNotes}
+                  onNotesChange={setDiveNotes}
+                  compact
+                />
+              )}
+              {currentPhase === 'breath' && (
+                <div className="space-y-2">
+                  <div className="text-center">
+                    <span className="text-2xl">🌊</span>
+                    <p className="text-sm text-foreground/80 font-medium">Descanso</p>
+                  </div>
+                  <BreathTagSelector
+                    selectedTags={breathTags}
+                    onTagsChange={setBreathTags}
+                    compact
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Missions widget */}
+            <MissionsWidget onClick={() => setShowMissionsPopup(true)} compact />
+          </div>
+
+          {/* Top right buttons */}
+          <div className="absolute top-3 right-4 flex gap-2">
+            <button
+              onClick={() => setShowPip(true)}
+              className="w-10 h-10 rounded-full glass-button flex items-center justify-center"
+              aria-label="Picture in Picture"
+            >
+              <Minimize2 className="w-4 h-4 text-foreground" />
+            </button>
+            <Link
+              to="/summary"
+              className="w-10 h-10 rounded-full glass-button flex items-center justify-center"
+              aria-label="Resumo do Dia"
+            >
+              <Calendar className="w-4 h-4 text-foreground" />
+            </Link>
+            <Link
+              to="/dashboard"
+              className="w-10 h-10 rounded-full glass-button flex items-center justify-center"
+              aria-label="Dashboard"
+            >
+              <BarChart3 className="w-4 h-4 text-foreground" />
+            </Link>
+            <Link
+              to="/settings"
+              className="w-10 h-10 rounded-full glass-button flex items-center justify-center"
+              aria-label="Configurações"
+            >
+              <Settings className="w-4 h-4 text-foreground" />
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="w-10 h-10 rounded-full glass-button flex items-center justify-center"
+              aria-label="Sair"
+            >
+              <LogOut className="w-4 h-4 text-foreground" />
+            </button>
+          </div>
+        </div>
+
+        {/* Popups */}
+        <PhasePopup
+          isOpen={showPopup}
+          nextPhase={pendingPhaseRef.current || getNextPhase(currentPhase)}
+          onContinue={handleContinue}
+          onWait={handleWait}
+        />
+        <RatingPopup
+          isOpen={showRatingPopup}
+          onSubmit={handleRatingSubmit}
+          onSkip={handleRatingSkip}
+        />
+        <OverfocusPopup
+          isOpen={showOverfocusPopup}
+          extraTimeSeconds={extraTime}
+          onInclude={() => handleOverfocusDecision(true)}
+          onDiscard={() => handleOverfocusDecision(false)}
+        />
+        <MissionsPopup
+          isOpen={showMissionsPopup}
+          onClose={() => setShowMissionsPopup(false)}
+        />
+        {documentPipSupported ? (
+          <DocumentPictureInPicture
+            isOpen={showPip}
+            onClose={() => setShowPip(false)}
+            timeLeft={timeLeft}
+            totalTime={totalTime}
+            currentPhase={currentPhase}
+            isRunning={isRunning}
+            isOvertime={isOvertime}
+            extraTime={extraTime}
+            onPlayPause={handlePlayPause}
+            onSkip={handleSkip}
+          />
+        ) : (
+          <PictureInPicture
+            isOpen={showPip}
+            onClose={() => setShowPip(false)}
+            timeLeft={timeLeft}
+            totalTime={totalTime}
+            currentPhase={currentPhase}
+            isRunning={isRunning}
+            onPlayPause={handlePlayPause}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Portrait layout (original)
   return (
     <div 
       className="min-h-screen transition-all duration-1000 ease-in-out"

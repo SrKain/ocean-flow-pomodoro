@@ -5,9 +5,10 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface MissionsWidgetProps {
   onClick: () => void;
+  compact?: boolean;
 }
 
-export function MissionsWidget({ onClick }: MissionsWidgetProps) {
+export function MissionsWidget({ onClick, compact = false }: MissionsWidgetProps) {
   const { user } = useAuth();
   const [completedCount, setCompletedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -66,14 +67,17 @@ export function MissionsWidget({ onClick }: MissionsWidgetProps) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 px-4 py-2 rounded-full glass-button hover:scale-105 transition-transform"
+      className={cn(
+        "flex items-center gap-2 rounded-full glass-button hover:scale-105 transition-transform",
+        compact ? "px-3 py-1.5" : "px-4 py-2 gap-3"
+      )}
     >
-      <Target className="w-4 h-4 text-primary" />
+      <Target className={cn(compact ? "w-3 h-3" : "w-4 h-4", "text-primary")} />
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-foreground">
+        <span className={cn(compact ? "text-xs" : "text-sm", "font-medium text-foreground")}>
           {completedCount}/{totalCount}
         </span>
-        {totalCount > 0 && (
+        {totalCount > 0 && !compact && (
           <>
             <div className="w-16 h-1.5 bg-muted/30 rounded-full overflow-hidden">
               <div 
@@ -89,4 +93,8 @@ export function MissionsWidget({ onClick }: MissionsWidgetProps) {
       </div>
     </button>
   );
+}
+
+function cn(...classes: (string | boolean | undefined)[]) {
+  return classes.filter(Boolean).join(' ');
 }

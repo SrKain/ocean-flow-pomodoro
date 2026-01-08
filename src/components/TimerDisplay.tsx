@@ -16,6 +16,7 @@ interface TimerDisplayProps {
   phase: Phase;
   onTimeChange?: (newTimeSeconds: number) => void;
   editable?: boolean;
+  compact?: boolean;
 }
 
 const phaseColors: Record<Phase, string> = {
@@ -30,6 +31,7 @@ export function TimerDisplay({
   phase,
   onTimeChange,
   editable = true,
+  compact = false,
 }: TimerDisplayProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editMinutes, setEditMinutes] = useState(minutes);
@@ -68,7 +70,8 @@ export function TimerDisplay({
       >
         <div 
           className={cn(
-            "text-7xl sm:text-8xl font-light tracking-tight transition-colors duration-500",
+            "font-light tracking-tight transition-colors duration-500",
+            compact ? "text-4xl" : "text-7xl sm:text-8xl",
             phase === 'breath' ? 'timer-text-breath' : cn('timer-text', phaseColors[phase])
           )}
         >

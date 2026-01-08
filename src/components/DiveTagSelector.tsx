@@ -16,6 +16,7 @@ interface DiveTagSelectorProps {
   notes: string;
   onNotesChange: (notes: string) => void;
   className?: string;
+  compact?: boolean;
 }
 
 const defaultColors = [
@@ -32,7 +33,8 @@ export function DiveTagSelector({
   onTagsChange, 
   notes, 
   onNotesChange, 
-  className 
+  className,
+  compact = false 
 }: DiveTagSelectorProps) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -120,10 +122,10 @@ export function DiveTagSelector({
   }
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn(compact ? "space-y-2" : "space-y-4", className)}>
       {/* Tags Section */}
-      <div className="space-y-2">
-        <p className="text-xs text-muted-foreground">Tags do mergulho</p>
+      <div className={cn(compact ? "space-y-1" : "space-y-2")}>
+        {!compact && <p className="text-xs text-muted-foreground">Tags do mergulho</p>}
         <div className="flex flex-wrap gap-2">
           {tags.map((tag) => {
             const isSelected = selectedTags.some(t => t.id === tag.id);
@@ -133,8 +135,9 @@ export function DiveTagSelector({
                 type="button"
                 onClick={() => toggleTag(tag)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200",
+                  "flex items-center gap-1.5 rounded-full font-medium transition-all duration-200",
                   "border backdrop-blur-sm",
+                  compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm",
                   isSelected
                     ? "border-white/30 shadow-lg scale-105"
                     : "border-white/10 hover:border-white/20 opacity-70 hover:opacity-100"
@@ -218,18 +221,20 @@ export function DiveTagSelector({
       </div>
 
       {/* Notes Textarea */}
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder="📝 Observações do mergulho..."
-        className={cn(
-          "w-full px-4 py-3 rounded-xl glass-button",
-          "bg-white/5 border border-white/10",
-          "text-foreground placeholder:text-muted-foreground",
-          "focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20",
-          "transition-all min-h-[80px] resize-none"
-        )}
-      />
+      {!compact && (
+        <textarea
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          placeholder="📝 Observações do mergulho..."
+          className={cn(
+            "w-full px-4 py-3 rounded-xl glass-button",
+            "bg-white/5 border border-white/10",
+            "text-foreground placeholder:text-muted-foreground",
+            "focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20",
+            "transition-all min-h-[80px] resize-none"
+          )}
+        />
+      )}
     </div>
   );
 }

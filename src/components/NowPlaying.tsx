@@ -2,7 +2,11 @@ import { Music, Pause, Play, X } from 'lucide-react';
 import { useSpotify } from '@/hooks/useSpotify';
 import { Button } from '@/components/ui/button';
 
-export function NowPlaying() {
+interface NowPlayingProps {
+  compact?: boolean;
+}
+
+export function NowPlaying({ compact = false }: NowPlayingProps) {
   const { isConnected, isLoading, currentTrack, connect, disconnect } = useSpotify();
 
   if (isLoading) return null;

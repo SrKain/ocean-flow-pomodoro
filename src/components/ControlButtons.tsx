@@ -5,28 +5,31 @@ interface ControlButtonsProps {
   isRunning: boolean;
   onPlayPause: () => void;
   onSkip: () => void;
+  compact?: boolean;
 }
 
-export function ControlButtons({ isRunning, onPlayPause, onSkip }: ControlButtonsProps) {
+export function ControlButtons({ isRunning, onPlayPause, onSkip, compact = false }: ControlButtonsProps) {
   return (
-    <div className="flex items-center justify-center gap-4">
+    <div className={cn("flex items-center justify-center", compact ? "gap-2" : "gap-4")}>
       <button
         onClick={onSkip}
         className={cn(
-          "w-14 h-14 rounded-full glass-button flex items-center justify-center",
-          "transition-all hover:scale-105"
+          "rounded-full glass-button flex items-center justify-center",
+          "transition-all hover:scale-105",
+          compact ? "w-10 h-10" : "w-14 h-14"
         )}
         aria-label="Pular fase"
       >
-        <SkipForward className="w-6 h-6 text-foreground" />
+        <SkipForward className={cn(compact ? "w-4 h-4" : "w-6 h-6", "text-foreground")} />
       </button>
       
       <button
         onClick={onPlayPause}
         className={cn(
-          "w-20 h-20 rounded-full flex items-center justify-center",
+          "rounded-full flex items-center justify-center",
           "transition-all duration-200 hover:scale-105",
-          isRunning && "animate-pulse-glow"
+          isRunning && "animate-pulse-glow",
+          compact ? "w-14 h-14" : "w-20 h-20"
         )}
         style={{
           background: 'linear-gradient(180deg, hsl(200, 80%, 58%) 0%, hsl(200, 80%, 48%) 100%)',
@@ -36,13 +39,13 @@ export function ControlButtons({ isRunning, onPlayPause, onSkip }: ControlButton
         aria-label={isRunning ? "Pausar" : "Iniciar"}
       >
         {isRunning ? (
-          <Pause className="w-8 h-8" />
+          <Pause className={cn(compact ? "w-5 h-5" : "w-8 h-8")} />
         ) : (
-          <Play className="w-8 h-8 ml-1" />
+          <Play className={cn(compact ? "w-5 h-5" : "w-8 h-8", "ml-0.5")} />
         )}
       </button>
 
-      <div className="w-14 h-14" /> {/* Spacer for symmetry */}
+      <div className={cn(compact ? "w-10 h-10" : "w-14 h-14")} /> {/* Spacer for symmetry */}
     </div>
   );
 }

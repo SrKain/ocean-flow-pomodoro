@@ -14,6 +14,7 @@ interface BreathTagSelectorProps {
   selectedTags: BreathTag[];
   onTagsChange: (tags: BreathTag[]) => void;
   className?: string;
+  compact?: boolean;
 }
 
 // Warm, calming colors for breath/rest tags
@@ -26,7 +27,7 @@ const breathColors = [
   'hsl(120, 40%, 50%)',  // Sage green
 ];
 
-export function BreathTagSelector({ selectedTags, onTagsChange, className }: BreathTagSelectorProps) {
+export function BreathTagSelector({ selectedTags, onTagsChange, className, compact = false }: BreathTagSelectorProps) {
   const [tags, setTags] = useState<BreathTag[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [newTagName, setNewTagName] = useState('');
@@ -131,12 +132,14 @@ export function BreathTagSelector({ selectedTags, onTagsChange, className }: Bre
   }
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn(compact ? "space-y-2" : "space-y-3", className)}>
       {/* Header */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Brain className="w-4 h-4" />
-        <span>Como você está se sentindo?</span>
-      </div>
+      {!compact && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Brain className="w-4 h-4" />
+          <span>Como você está se sentindo?</span>
+        </div>
+      )}
 
       {/* Tags */}
       <div className="flex flex-wrap gap-2">
@@ -148,8 +151,9 @@ export function BreathTagSelector({ selectedTags, onTagsChange, className }: Bre
               type="button"
               onClick={() => toggleTag(tag)}
               className={cn(
-                "group relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200",
+                "group relative flex items-center gap-1.5 rounded-full font-medium transition-all duration-200",
                 "border backdrop-blur-sm",
+                compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm",
                 isSelected
                   ? "border-white/30 shadow-lg scale-105"
                   : "border-white/10 hover:border-white/20 opacity-70 hover:opacity-100"

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { useAuth } from './useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SpotifyTrack {
   name: string;
@@ -51,11 +52,6 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
   return base64urlencode(hashed);
 }
 
-// Helper to get user-specific storage keys
-function getStorageKey(userId: string | undefined, key: string): string {
-  return userId ? `spotify_${key}_${userId}` : `spotify_${key}`;
-}
-
 export function SpotifyProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -64,10 +60,9 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<SpotifyTrack | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load tokens from localStorage on mount or when user changes
+  // Load tokens from database on mount or when user changes
   useEffect(() => {
     if (!user) {
-      // Clear state when user logs out
       setAccessToken(null);
       setRefreshToken(null);
       setExpiresAt(null);
@@ -76,24 +71,41 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const storedToken = localStorage.getItem(getStorageKey(user.id, 'access_token'));
-    const storedRefresh = localStorage.getItem(getStorageKey(user.id, 'refresh_token'));
-    const storedExpiry = localStorage.getItem(getStorageKey(user.id, 'expires_at'));
-    
-    if (storedToken && storedExpiry) {
-      const expiry = parseInt(storedExpiry);
-      if (Date.now() < expiry) {
-        setAccessToken(storedToken);
-        setRefreshToken(storedRefresh);
-        setExpiresAt(expiry);
-      } else if (storedRefresh) {
-        refreshAccessToken(storedRefresh);
+    const loadTokensFromDb = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('spotify_connections')
+          .select('access_token, refresh_token, expires_at')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error loading Spotify tokens:', error);
+          setIsLoading(false);
+          return;
+        }
+
+        if (data) {
+          const expiry = Number(data.expires_at);
+          if (Date.now() < expiry) {
+            setAccessToken(data.access_token);
+            setRefreshToken(data.refresh_token);
+            setExpiresAt(expiry);
+          } else if (data.refresh_token) {
+            await refreshAccessToken(data.refresh_token);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading Spotify tokens:', error);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    };
+
+    loadTokensFromDb();
   }, [user]);
 
-  // Handle OAuth callback (wait for app auth user to be ready)
+  // Handle OAuth callback
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -101,9 +113,6 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     const storedState = localStorage.getItem('spotify_auth_state');
 
     if (!code) return;
-
-    // IMPORTANT: When returning from Spotify, the app may still be loading auth.
-    // If we consume/clean the URL too early, we lose the code before we can exchange it.
     if (!user) return;
 
     if (state && storedState && state === storedState) {
@@ -112,10 +121,30 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       console.error('Spotify OAuth state mismatch. Please try connecting again.');
     }
 
-    // Clean URL (remove code/state)
     window.history.replaceState({}, document.title, window.location.pathname);
     localStorage.removeItem('spotify_auth_state');
   }, [user]);
+
+  const saveTokensToDb = async (tokens: { accessToken: string; refreshToken: string | null; expiresAt: number }) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('spotify_connections')
+        .upsert({
+          user_id: user.id,
+          access_token: tokens.accessToken,
+          refresh_token: tokens.refreshToken,
+          expires_at: tokens.expiresAt,
+        }, { onConflict: 'user_id' });
+
+      if (error) {
+        console.error('Error saving Spotify tokens:', error);
+      }
+    } catch (error) {
+      console.error('Error saving Spotify tokens:', error);
+    }
+  };
 
   const exchangeCodeForToken = async (code: string) => {
     const verifier = localStorage.getItem('spotify_code_verifier');
@@ -147,10 +176,12 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
         setRefreshToken(data.refresh_token);
         setExpiresAt(expiry);
 
-        // Store with user-specific keys
-        localStorage.setItem(getStorageKey(user.id, 'access_token'), data.access_token);
-        localStorage.setItem(getStorageKey(user.id, 'refresh_token'), data.refresh_token);
-        localStorage.setItem(getStorageKey(user.id, 'expires_at'), expiry.toString());
+        await saveTokensToDb({
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          expiresAt: expiry,
+        });
+
         localStorage.removeItem('spotify_code_verifier');
       }
     } catch (error) {
@@ -160,7 +191,7 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
 
   const refreshAccessToken = async (token: string) => {
     if (!user) return;
-    
+
     try {
       const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
@@ -175,14 +206,17 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       if (data.access_token) {
         const expiry = Date.now() + data.expires_in * 1000;
+        const newRefreshToken = data.refresh_token || token;
+
         setAccessToken(data.access_token);
         setExpiresAt(expiry);
-        if (data.refresh_token) {
-          setRefreshToken(data.refresh_token);
-          localStorage.setItem(getStorageKey(user.id, 'refresh_token'), data.refresh_token);
-        }
-        localStorage.setItem(getStorageKey(user.id, 'access_token'), data.access_token);
-        localStorage.setItem(getStorageKey(user.id, 'expires_at'), expiry.toString());
+        setRefreshToken(newRefreshToken);
+
+        await saveTokensToDb({
+          accessToken: data.access_token,
+          refreshToken: newRefreshToken,
+          expiresAt: expiry,
+        });
       }
     } catch (error) {
       console.error('Error refreshing token:', error);
@@ -221,16 +255,21 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     window.location.href = `https://accounts.spotify.com/authorize?${params}`;
   }, [user]);
 
-  const disconnect = useCallback(() => {
+  const disconnect = useCallback(async () => {
     setAccessToken(null);
     setRefreshToken(null);
     setExpiresAt(null);
     setCurrentTrack(null);
-    
+
     if (user) {
-      localStorage.removeItem(getStorageKey(user.id, 'access_token'));
-      localStorage.removeItem(getStorageKey(user.id, 'refresh_token'));
-      localStorage.removeItem(getStorageKey(user.id, 'expires_at'));
+      try {
+        await supabase
+          .from('spotify_connections')
+          .delete()
+          .eq('user_id', user.id);
+      } catch (error) {
+        console.error('Error deleting Spotify connection:', error);
+      }
     }
   }, [user]);
 
