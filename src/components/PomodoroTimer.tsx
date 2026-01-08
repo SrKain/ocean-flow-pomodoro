@@ -49,6 +49,7 @@ export function PomodoroTimer() {
   const [breathTags, setBreathTags] = useState<BreathTag[]>([]);
   const [diveNotes, setDiveNotes] = useState('');
   const [lastBreathCycleId, setLastBreathCycleId] = useState<string | null>(null);
+  const [glowPhase, setGlowPhase] = useState(0); // For pulsing glow animation
   
   const startTimeRef = useRef<string | null>(null);
   const pendingPhaseRef = useRef<Phase | null>(null);
@@ -260,6 +261,14 @@ export function PomodoroTimer() {
     return () => clearInterval(interval);
   }, [isRunning, timeLeft, isOvertime, extraTime, handlePhaseComplete, updateSession]);
 
+  // Pulsing glow animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setGlowPhase(prev => (prev + 0.05) % (Math.PI * 2));
+    }, 50);
+    return () => clearInterval(interval);
+  }, []);
+
   const displayMinutes = isOvertime 
     ? Math.floor(extraTime / 60) 
     : Math.floor(timeLeft / 60);
@@ -326,12 +335,27 @@ export function PomodoroTimer() {
     }
   };
 
-  // Calculate background style based on phase and progress
+  // Get ring color (brighter version of background)
+  const getRingColor = () => {
+    const { hue, sat } = getPhaseColors();
+    // Ring is always bright and saturated for visibility
+    return `hsl(${hue}, ${Math.min(90, sat + 10)}%, 60%)`;
+  };
+
+  // Calculate background style based on phase and progress with pulsing glow
   const getBackgroundStyle = () => {
     const { hue, sat, light } = getPhaseColors();
     
+    // Create a subtle pulsing radial glow effect using glowPhase state
+    const glowOpacity = 0.12 + Math.sin(glowPhase) * 0.06; // Subtle pulse between 0.06-0.18
+    const glowSize = 75 + Math.sin(glowPhase * 0.7) * 10; // Size pulse 65%-85%
+    const glowLight = Math.min(75, light + 35);
+    
     return {
-      background: `linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${Math.max(3, light * 0.8)}%) 100%)`
+      background: `
+        radial-gradient(ellipse ${glowSize}% ${glowSize * 0.7}% at 50% 35%, hsla(${hue}, ${sat}%, ${glowLight}%, ${glowOpacity}) 0%, transparent 70%),
+        linear-gradient(180deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue}, ${sat * 0.9}%, ${Math.max(3, light * 0.8)}%) 100%)
+      `
     };
   };
 
@@ -369,7 +393,7 @@ export function PomodoroTimer() {
                 progress={progress} 
                 size={200}
                 strokeWidth={6}
-                color={isOvertime ? 'hsl(45, 100%, 55%)' : phaseColors[currentPhase]}
+                color={isOvertime ? 'hsl(45, 100%, 55%)' : getRingColor()}
               />
               <div className="absolute inset-0 flex items-center justify-center">
                 <TimerDisplay 
@@ -619,7 +643,7 @@ export function PomodoroTimer() {
             progress={progress} 
             size={300}
             strokeWidth={8}
-            color={isOvertime ? 'hsl(45, 100%, 55%)' : phaseColors[currentPhase]}
+            color={isOvertime ? 'hsl(45, 100%, 55%)' : getRingColor()}
           />
           <div className="absolute inset-0 flex items-center justify-center">
             <TimerDisplay 
