@@ -708,3 +708,121 @@ export async function getBreathTagStatsAsync(startDate?: Date, endDate?: Date): 
     return [];
   }
 }
+
+export interface TagGroupStats {
+  groupId: string;
+  groupName: string;
+  groupColor: string;
+  cycleCount: number;
+  totalTimeMinutes: number;
+  tags: string[];
+}
+
+// Get tag group statistics
+export async function getTagGroupStatsAsync(startDate?: Date, endDate?: Date): Promise<TagGroupStats[]> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    // Fetch all tag groups
+    const { data: groupsData, error: groupsError } = await supabase
+      .from('tag_groups')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (groupsError) {
+      console.error('Error fetching tag groups:', groupsError);
+      return [];
+    }
+
+    // Fetch all tags with their groups
+    const { data: tagsData, error: tagsError } = await supabase
+      .from('tags')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('tag_type', 'focus');
+
+    if (tagsError) {
+      console.error('Error fetching tags:', tagsError);
+      return [];
+    }
+
+    // Build a map of tag name to group_id
+    const tagToGroup = new Map<string, string>();
+    const tagsByGroup = new Map<string, string[]>();
+    
+    for (const tag of tagsData || []) {
+      if (tag.group_id) {
+        tagToGroup.set(tag.name, tag.group_id);
+        const existing = tagsByGroup.get(tag.group_id) || [];
+        existing.push(tag.name);
+        tagsByGroup.set(tag.group_id, existing);
+      }
+    }
+
+    // Get cycle data
+    const cycles = await getCyclesAsync(startDate, endDate);
+    const immersionCycles = cycles.filter(c => c.phase === 'immersion' && c.tag);
+    const diveCycles = cycles.filter(c => c.phase === 'dive' && c.completed);
+
+    // Build group stats
+    const groupStatsMap = new Map<string, { cycleCount: number; totalTimeMinutes: number }>();
+
+    // Count cycles by group
+    for (const cycle of immersionCycles) {
+      const groupId = tagToGroup.get(cycle.tag || '');
+      if (groupId) {
+        const existing = groupStatsMap.get(groupId) || { cycleCount: 0, totalTimeMinutes: 0 };
+        existing.cycleCount += 1;
+        groupStatsMap.set(groupId, existing);
+      }
+    }
+
+    // Calculate time from dive cycles
+    for (let i = 0; i < diveCycles.length; i++) {
+      const diveCycle = diveCycles[i];
+      const diveIndex = cycles.indexOf(diveCycle);
+      
+      // Find the associated immersion tag
+      let associatedTag = '';
+      for (let j = diveIndex - 1; j >= 0; j--) {
+        if (cycles[j].phase === 'immersion' && cycles[j].tag) {
+          associatedTag = cycles[j].tag!;
+          break;
+        }
+      }
+      
+      const groupId = tagToGroup.get(associatedTag);
+      if (groupId) {
+        const startTime = new Date(diveCycle.startTime).getTime();
+        const endTime = new Date(diveCycle.endTime).getTime();
+        const durationMinutes = Math.round((endTime - startTime) / 60000);
+        
+        const existing = groupStatsMap.get(groupId) || { cycleCount: 0, totalTimeMinutes: 0 };
+        existing.totalTimeMinutes += durationMinutes;
+        groupStatsMap.set(groupId, existing);
+      }
+    }
+
+    // Build final result
+    const result: TagGroupStats[] = [];
+    for (const group of groupsData || []) {
+      const stats = groupStatsMap.get(group.id);
+      if (stats && (stats.cycleCount > 0 || stats.totalTimeMinutes > 0)) {
+        result.push({
+          groupId: group.id,
+          groupName: group.name,
+          groupColor: group.color || 'hsl(200, 80%, 55%)',
+          cycleCount: stats.cycleCount,
+          totalTimeMinutes: stats.totalTimeMinutes,
+          tags: tagsByGroup.get(group.id) || [],
+        });
+      }
+    }
+
+    return result.sort((a, b) => b.totalTimeMinutes - a.totalTimeMinutes);
+  } catch (e) {
+    console.error('Error getting tag group stats:', e);
+    return [];
+  }
+}
