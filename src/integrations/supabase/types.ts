@@ -137,6 +137,33 @@ export type Database = {
           },
         ]
       }
+      daily_ratings: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          rating: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          rating: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          rating?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       pomodoro_settings: {
         Row: {
           breath_minutes: number

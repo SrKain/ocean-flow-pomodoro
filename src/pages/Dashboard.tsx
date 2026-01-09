@@ -24,6 +24,7 @@ import { MusicAnalytics } from "@/components/MusicAnalytics";
 import { BreathAnalytics } from "@/components/BreathAnalytics";
 import { GroupAnalytics } from "@/components/GroupAnalytics";
 import { TagManagement } from "@/components/TagManagement";
+import { AIInsightsCard } from "@/components/AIInsightsCard";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -260,6 +261,11 @@ const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
             </div>
           </div>
         </div>
+
+        {/* AI Insights Card */}
+        <section className="mb-6">
+          <AIInsightsCard period={period} />
+        </section>
 
         {/* Daily Evolution Chart */}
         {dailyStats.length > 0 && (
