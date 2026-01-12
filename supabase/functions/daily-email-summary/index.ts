@@ -159,18 +159,29 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get today's date in local timezone (BRT)
+    // Use UTC for date comparison since database stores in UTC
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    const dateStr = todayStart.toLocaleDateString("pt-BR", { 
+    // Get start of today in UTC
+    const todayStartUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+    const todayEndUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59));
+    
+    // For display, use BRT (UTC-3)
+    const brtOffset = -3 * 60 * 60 * 1000;
+    const nowBRT = new Date(now.getTime() + brtOffset);
+    const dateStr = nowBRT.toLocaleDateString("pt-BR", { 
       weekday: "long", 
       year: "numeric", 
       month: "long", 
-      day: "numeric" 
+      day: "numeric",
+      timeZone: "America/Sao_Paulo"
     });
+    
+    // Also get date string for queries (YYYY-MM-DD in BRT)
+    const todayDateStr = `${nowBRT.getFullYear()}-${String(nowBRT.getMonth() + 1).padStart(2, '0')}-${String(nowBRT.getDate()).padStart(2, '0')}`;
 
     console.log(`Processing summaries for ${dateStr}`);
+    console.log(`UTC range: ${todayStartUTC.toISOString()} to ${todayEndUTC.toISOString()}`);
+    console.log(`BRT date string: ${todayDateStr}`);
 
     // Get all users with their profiles
     const { data: profiles, error: profilesError } = await supabaseClient
@@ -217,37 +228,41 @@ const handler = async (req: Request): Promise<Response> => {
         continue;
       }
 
-      // Get today's cycles for this user
+      // Get today's cycles for this user (using UTC range)
       const { data: cycles, error: cyclesError } = await supabaseClient
         .from("cycle_records")
         .select("*")
         .eq("user_id", userId)
-        .gte("start_time", todayStart.toISOString())
-        .lte("start_time", todayEnd.toISOString());
+        .gte("start_time", todayStartUTC.toISOString())
+        .lte("start_time", todayEndUTC.toISOString());
+
+      console.log(`User ${userId}: Found ${cycles?.length || 0} cycles`);
 
       if (cyclesError) {
         console.error(`Error fetching cycles for user ${userId}:`, cyclesError);
         continue;
       }
 
-      // Get today's tasks for this user
+      // Get today's tasks for this user (using BRT date)
       const { data: tasks, error: tasksError } = await supabaseClient
         .from("tasks")
         .select("*")
         .eq("user_id", userId)
-        .eq("due_date", todayStart.toISOString().split("T")[0]);
+        .eq("due_date", todayDateStr);
 
       if (tasksError) {
         console.error(`Error fetching tasks for user ${userId}:`, tasksError);
         continue;
       }
+      
+      console.log(`User ${userId}: Found ${tasks?.length || 0} tasks`);
 
-      // Get today's rating
+      // Get today's rating (using BRT date)
       const { data: ratings, error: ratingsError } = await supabaseClient
         .from("daily_ratings")
         .select("rating")
         .eq("user_id", userId)
-        .eq("date", todayStart.toISOString().split("T")[0])
+        .eq("date", todayDateStr)
         .single();
 
       // Calculate focus time (only immersion and dive phases)
