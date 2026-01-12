@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Send, Loader2 } from "lucide-react";
 import { getSettingsAsync, saveSettingsAsync, PomodoroSettings } from "@/lib/database";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Settings() {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<PomodoroSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     getSettingsAsync().then((s) => {
@@ -21,6 +23,25 @@ export default function Settings() {
     await saveSettingsAsync(settings);
     toast.success("Configurações salvas!");
     navigate("/");
+  };
+
+  const handleSendDailyEmail = async () => {
+    setSendingEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('daily-email-summary');
+      
+      if (error) {
+        toast.error("Erro ao enviar email: " + error.message);
+      } else if (data?.emailsSent > 0) {
+        toast.success(`Email enviado com sucesso! (${data.emailsSent} email(s))`);
+      } else {
+        toast.info("Nenhum email enviado - sem atividade registrada hoje.");
+      }
+    } catch (err) {
+      toast.error("Erro ao enviar email");
+    } finally {
+      setSendingEmail(false);
+    }
   };
 
   if (loading || !settings) {
@@ -132,6 +153,31 @@ export default function Settings() {
               <span>→</span>
               <span className="text-xs">🔄</span>
             </div>
+          </div>
+
+          {/* Email Summary */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-foreground font-medium mb-3">📧 Resumo por Email</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Envie agora o resumo diário de produtividade para o seu email.
+            </p>
+            <button
+              onClick={handleSendDailyEmail}
+              disabled={sendingEmail}
+              className="w-full py-3 rounded-xl bg-ocean-light/20 text-ocean-light font-medium flex items-center justify-center gap-2 transition-all hover:bg-ocean-light/30 disabled:opacity-50"
+            >
+              {sendingEmail ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Send className="w-5 h-5" />
+                  Enviar Resumo Agora
+                </>
+              )}
+            </button>
           </div>
 
           {/* Save Button */}

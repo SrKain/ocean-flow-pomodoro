@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Waves, Mail, Lock, User, ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
+import { supabase } from '@/integrations/supabase/client';
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string().min(6, 'Senha deve ter pelo menos 6 caracteres');
@@ -103,11 +104,15 @@ export default function Auth() {
           });
         }
       } else if (mode === 'reset') {
-        const { error } = await resetPassword(email);
+        // Use custom SMTP edge function for password reset
+        const { error } = await supabase.functions.invoke('send-reset-email', {
+          body: { email },
+        });
+        
         if (error) {
           toast({
             title: 'Erro',
-            description: error.message,
+            description: 'Não foi possível enviar o email de recuperação.',
             variant: 'destructive',
           });
         } else {
