@@ -2,3 +2,6 @@ project_id = "dozwldphfqsnukukriip"
 
 [functions.ai-insights]
 verify_jwt = false
+
+[functions.daily-email-summary]
+verify_jwt = false
