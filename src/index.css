@@ -46,10 +46,10 @@
     --coral-soft: 25 70% 70%;
     --water-glow: 195 100% 70%;
 
-    /* Breath phase - high contrast */
-    --breath-text: 25 95% 25%;
-    --breath-bg-start: 30 80% 65%;
-    --breath-bg-end: 25 70% 55%;
+    /* Breath phase - dark theme */
+    --breath-text: 200 20% 95%;
+    --breath-bg-start: 25 40% 18%;
+    --breath-bg-end: 20 35% 12%;
 
     /* Glassmorphism iOS */
     --glass-bg: 210 40% 15% / 0.5;
@@ -57,11 +57,11 @@
     --glass-shadow: 210 50% 5% / 0.3;
     --glass-highlight: 0 0% 100% / 0.1;
 
-    /* Phase gradients */
-    --immersion-start: 195 85% 60%;
-    --immersion-end: 215 65% 20%;
+    /* Phase gradients - all dark */
+    --immersion-start: 205 50% 18%;
+    --immersion-end: 215 55% 10%;
     --dive-bg: 0 0% 0%;
-    --breath-bg: 25 60% 50%;
+    --breath-bg: 25 30% 12%;
   }
 }
 
@@ -193,14 +193,13 @@
       0 2px 4px hsla(0, 0%, 0%, 0.3);
   }
 
-  /* Timer text for breath phase - high contrast */
+  /* Timer text for breath phase - dark theme with warm glow */
   .timer-text-breath {
     color: hsl(var(--breath-text));
     text-shadow: 
-      0 0 20px hsla(25, 90%, 30%, 0.5),
-      0 2px 0 hsla(0, 0%, 100%, 0.3),
-      0 4px 8px hsla(0, 0%, 0%, 0.2),
-      0 -1px 0 hsla(0, 0%, 100%, 0.4);
+      0 0 30px hsla(25, 80%, 50%, 0.6),
+      0 0 60px hsla(25, 70%, 40%, 0.4),
+      0 2px 4px hsla(0, 0%, 0%, 0.3);
   }
 
   /* Polar ring */
@@ -247,6 +246,14 @@
       180deg,
       hsl(var(--breath-bg-start)) 0%,
       hsl(var(--breath-bg-end)) 100%
+    );
+  }
+
+  .bg-immersion {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--immersion-start)) 0%,
+      hsl(var(--immersion-end)) 100%
     );
   }
 }
