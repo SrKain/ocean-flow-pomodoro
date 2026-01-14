@@ -48,8 +48,8 @@
 
     /* Breath phase - dark theme */
     --breath-text: 200 20% 95%;
-    --breath-bg-start: 25 40% 18%;
-    --breath-bg-end: 20 35% 12%;
+    --breath-bg-start: 25 35% 12%;
+    --breath-bg-end: 20 30% 8%;
 
     /* Glassmorphism iOS */
     --glass-bg: 210 40% 15% / 0.5;
@@ -58,10 +58,10 @@
     --glass-highlight: 0 0% 100% / 0.1;
 
     /* Phase gradients - all dark */
-    --immersion-start: 205 50% 18%;
-    --immersion-end: 215 55% 10%;
-    --dive-bg: 0 0% 0%;
-    --breath-bg: 25 30% 12%;
+    --immersion-start: 200 50% 12%;
+    --immersion-end: 215 50% 8%;
+    --dive-bg: 215 50% 6%;
+    --breath-bg: 25 35% 10%;
   }
 }
 
