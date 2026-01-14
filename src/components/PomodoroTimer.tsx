@@ -284,55 +284,45 @@ export function PomodoroTimer() {
       : 1 - Math.pow(-2 * t + 2, 3) / 2;
   };
 
-  // Calculate phase colors based on progress (with easing)
+  // Calculate phase colors based on progress (with easing) - DARK MODE ONLY
   const getPhaseColors = () => {
     const easedProgress = easeInOutCubic(progress);
     
     if (currentPhase === 'dive') {
-      // Start: azul quase preto (hsl 215, 50%, 5%)
-      // End: laranja (hsl 30, 80%, 50%)
-      const hue = 215 - easedProgress * 185; // 215 → 30
-      const sat = 50 + easedProgress * 30; // 50% → 80%
-      const light = 5 + easedProgress * 45; // 5% → 50%
+      // Start: azul escuro profundo (hsl 215, 50%, 8%)
+      // End: laranja escuro/âmbar (hsl 25, 45%, 15%)
+      const hue = 215 - easedProgress * 190; // 215 → 25
+      const sat = 50 - easedProgress * 5; // 50% → 45%
+      const light = 8 + easedProgress * 7; // 8% → 15%
       return { hue, sat, light };
     }
     
     if (currentPhase === 'breath') {
-      // Start: laranja (hsl 30, 80%, 50%)
-      // End: azul claro (hsl 195, 85%, 60%)
-      const hue = 30 + easedProgress * 165; // 30 → 195
-      const sat = 80 + easedProgress * 5; // 80% → 85%
-      const light = 50 + easedProgress * 10; // 50% → 60%
+      // Start: laranja escuro/âmbar (hsl 25, 45%, 15%)
+      // End: azul escuro ciano (hsl 200, 50%, 12%)
+      const hue = 25 + easedProgress * 175; // 25 → 200
+      const sat = 45 + easedProgress * 5; // 45% → 50%
+      const light = 15 - easedProgress * 3; // 15% → 12%
       return { hue, sat, light };
     }
     
     if (currentPhase === 'immersion') {
-      // Start: azul claro (hsl 195, 85%, 60%)
-      // End: azul quase preto (hsl 215, 50%, 5%)
-      const hue = 195 + easedProgress * 20; // 195 → 215
-      const sat = 85 - easedProgress * 35; // 85% → 50%
-      const light = 60 - easedProgress * 55; // 60% → 5%
+      // Start: azul escuro ciano (hsl 200, 50%, 12%)
+      // End: azul escuro profundo (hsl 215, 50%, 8%)
+      const hue = 200 + easedProgress * 15; // 200 → 215
+      const sat = 50; // mantém 50%
+      const light = 12 - easedProgress * 4; // 12% → 8%
       return { hue, sat, light };
     }
     
-    return { hue: 215, sat: 50, light: 5 };
+    return { hue: 215, sat: 50, light: 8 };
   };
 
-  // Get timer text color based on background (contrasting)
+  // Get timer text color based on background (contrasting) - always light for dark mode
   const getTimerColor = () => {
-    const { hue, sat, light } = getPhaseColors();
-    
-    // For dark backgrounds (light < 30), use bright contrasting color
-    // For bright backgrounds (light >= 30), use dark contrasting color
-    if (light < 30) {
-      // Light text for dark backgrounds - use complementary bright color
-      const textLight = Math.min(85, light + 60);
-      return `hsl(${hue}, ${sat * 0.8}%, ${textLight}%)`;
-    } else {
-      // Dark text for bright backgrounds
-      const textLight = Math.max(15, light - 35);
-      return `hsl(${hue}, ${sat * 0.9}%, ${textLight}%)`;
-    }
+    const { hue, sat } = getPhaseColors();
+    // Always use light, bright text for dark backgrounds
+    return `hsl(${hue}, ${Math.min(70, sat + 20)}%, 85%)`;
   };
 
   // Get ring color (brighter version of background)
