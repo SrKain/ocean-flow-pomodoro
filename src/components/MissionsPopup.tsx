@@ -27,7 +27,9 @@ export function MissionsPopup({ isOpen, onClose }: MissionsPopupProps) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const today = new Date().toISOString().split('T')[0];
+  // Use local date to ensure tasks match user's timezone
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   useEffect(() => {
     if (user && isOpen) {
