@@ -34,6 +34,10 @@ export default function Settings() {
         toast.error("Erro ao enviar email: " + error.message);
       } else if (data?.emailsSent > 0) {
         toast.success(`Email enviado com sucesso! (${data.emailsSent} email(s))`);
+      } else if (data?.emailsFailed > 0) {
+        toast.error(
+          `Falha ao enviar email (${data.emailsFailed}). Verifique suas credenciais SMTP.`
+        );
       } else {
         toast.info("Nenhum email enviado - sem atividade registrada hoje.");
       }

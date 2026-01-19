@@ -159,49 +159,97 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Use UTC for date comparison since database stores in UTC
+    // Calculate "today" based on America/Sao_Paulo (BRT) and convert boundaries to UTC.
+    // This prevents off-by-one-day issues when the function runs near midnight UTC.
+    const timeZone = "America/Sao_Paulo";
     const now = new Date();
-    // Get start of today in UTC
-    const todayStartUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
-    const todayEndUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59));
-    
-    // For display, use BRT (UTC-3)
-    const brtOffset = -3 * 60 * 60 * 1000;
-    const nowBRT = new Date(now.getTime() + brtOffset);
-    const dateStr = nowBRT.toLocaleDateString("pt-BR", { 
-      weekday: "long", 
-      year: "numeric", 
-      month: "long", 
+
+    // YYYY-MM-DD in Sao Paulo
+    const todayDateStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+
+    const [year, month, day] = todayDateStr.split("-").map((v) => parseInt(v, 10));
+
+    // Sao Paulo midnight == 03:00 UTC (BRT is UTC-3)
+    const todayStartUTC = new Date(Date.UTC(year, month - 1, day, 3, 0, 0, 0));
+    const todayEndUTC = new Date(Date.UTC(year, month - 1, day + 1, 2, 59, 59, 999));
+
+    const dateStr = now.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
       day: "numeric",
-      timeZone: "America/Sao_Paulo"
+      timeZone,
     });
-    
-    // Also get date string for queries (YYYY-MM-DD in BRT)
-    const todayDateStr = `${nowBRT.getFullYear()}-${String(nowBRT.getMonth() + 1).padStart(2, '0')}-${String(nowBRT.getDate()).padStart(2, '0')}`;
+
+    // If called by a logged-in user (Settings → Enviar Resumo Agora), send only for that user.
+    // If called without auth (cron/admin), process all users.
+    let targetUserId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const userClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } }
+      );
+
+      const { data: userData, error: userError } = await userClient.auth.getUser();
+      if (userError) {
+        console.warn("Could not resolve authenticated user; falling back to batch mode:", userError);
+      } else {
+        targetUserId = userData.user?.id ?? null;
+      }
+    }
 
     console.log(`Processing summaries for ${dateStr}`);
-    console.log(`UTC range: ${todayStartUTC.toISOString()} to ${todayEndUTC.toISOString()}`);
+    console.log(`UTC range (BRT day): ${todayStartUTC.toISOString()} to ${todayEndUTC.toISOString()}`);
     console.log(`BRT date string: ${todayDateStr}`);
+    console.log(`Mode: ${targetUserId ? `single (${targetUserId})` : "batch"}`);
 
-    // Get all users with their profiles
-    const { data: profiles, error: profilesError } = await supabaseClient
+    // Get users with their profiles
+    let profilesQuery = supabaseClient
       .from("profiles")
       .select("user_id, display_name");
+
+    if (targetUserId) {
+      profilesQuery = profilesQuery.eq("user_id", targetUserId);
+    }
+
+    const { data: profiles, error: profilesError } = await profilesQuery;
 
     if (profilesError) {
       console.error("Error fetching profiles:", profilesError);
       throw profilesError;
     }
 
-    // Get user emails from auth
-    const { data: authUsers, error: authError } = await supabaseClient.auth.admin.listUsers();
-    
-    if (authError) {
-      console.error("Error fetching auth users:", authError);
-      throw authError;
-    }
+    // Get user emails
+    const userEmailMap = new Map<string, string>();
 
-    const userEmailMap = new Map(authUsers.users.map(u => [u.id, u.email]));
+    if (targetUserId) {
+      const { data: authUserData, error: authError } = await supabaseClient.auth.admin.getUserById(targetUserId);
+      if (authError) {
+        console.error("Error fetching auth user:", authError);
+        throw authError;
+      }
+
+      const email = authUserData.user?.email;
+      if (email) userEmailMap.set(targetUserId, email);
+    } else {
+      const { data: authUsers, error: authError } = await supabaseClient.auth.admin.listUsers();
+
+      if (authError) {
+        console.error("Error fetching auth users:", authError);
+        throw authError;
+      }
+
+      for (const u of authUsers.users) {
+        if (u.email) userEmailMap.set(u.id, u.email);
+      }
+    }
 
     // Create SMTP client
     const client = new SMTPClient({
@@ -263,7 +311,11 @@ const handler = async (req: Request): Promise<Response> => {
         .select("rating")
         .eq("user_id", userId)
         .eq("date", todayDateStr)
-        .single();
+        .maybeSingle();
+
+      if (ratingsError) {
+        console.error(`Error fetching rating for user ${userId}:`, ratingsError);
+      }
 
       // Calculate focus time (only immersion and dive phases)
       let totalFocusTime = 0;
@@ -299,8 +351,13 @@ const handler = async (req: Request): Promise<Response> => {
         topTags,
       };
 
+      const hasActivity =
+        (cycles?.length ?? 0) > 0 ||
+        (tasks?.length ?? 0) > 0 ||
+        (ratings?.rating ?? null) !== null;
+
       // Only send email if user had some activity
-      if (summary.cyclesCompleted > 0 || summary.totalTasks > 0) {
+      if (hasActivity) {
         const html = generateEmailHtml(summary, dateStr);
         const success = await sendEmail(
           client,
