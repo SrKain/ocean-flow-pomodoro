@@ -63,8 +63,8 @@ const DailySummary = () => {
         .gte('created_at', today.toISOString())
         .lte('created_at', endOfDay.toISOString());
 
-      // Get tasks
-      const todayStr = today.toISOString().split('T')[0];
+      // Get tasks - use local date string
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       const { data: tasks } = await supabase
         .from('tasks')
         .select('*')
