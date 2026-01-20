@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Play, Pause, X, Minimize2, Move } from 'lucide-react';
+import { Play, Pause, X, Move, Music } from 'lucide-react';
 import { Phase } from '@/lib/database';
+
+interface SpotifyTrackInfo {
+  name: string;
+  artist: string;
+  albumArt?: string;
+}
 
 interface PictureInPictureProps {
   isOpen: boolean;
@@ -9,7 +15,10 @@ interface PictureInPictureProps {
   totalTime: number;
   currentPhase: Phase;
   isRunning: boolean;
+  isOvertime?: boolean;
+  extraTime?: number;
   onPlayPause: () => void;
+  currentTrack?: SpotifyTrackInfo | null;
 }
 
 const phaseNames: Record<Phase, string> = {
@@ -19,9 +28,9 @@ const phaseNames: Record<Phase, string> = {
 };
 
 const phaseColors: Record<Phase, string> = {
-  immersion: 'hsl(195, 85%, 65%)',
-  dive: 'hsl(200, 80%, 55%)',
-  breath: 'hsl(25, 90%, 60%)',
+  immersion: 'hsl(195, 85%, 70%)',
+  dive: 'hsl(200, 80%, 65%)',
+  breath: 'hsl(25, 90%, 65%)',
 };
 
 export function PictureInPicture({
@@ -31,7 +40,10 @@ export function PictureInPicture({
   totalTime,
   currentPhase,
   isRunning,
+  isOvertime,
+  extraTime,
   onPlayPause,
+  currentTrack,
 }: PictureInPictureProps) {
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
@@ -54,7 +66,6 @@ export function PictureInPicture({
       const newX = e.clientX - dragOffset.x;
       const newY = e.clientY - dragOffset.y;
       
-      // Keep within viewport bounds
       const maxX = window.innerWidth - (containerRef.current?.offsetWidth || 150);
       const maxY = window.innerHeight - (containerRef.current?.offsetHeight || 150);
       
@@ -80,7 +91,6 @@ export function PictureInPicture({
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Handle touch events for mobile
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (containerRef.current) {
       const touch = e.touches[0];
@@ -122,11 +132,14 @@ export function PictureInPicture({
 
   if (!isOpen) return null;
 
-  const minutes = Math.floor(timeLeft / 60);
-  const seconds = timeLeft % 60;
-  const progress = 1 - (timeLeft / totalTime);
+  const displayTime = isOvertime ? (extraTime || 0) : timeLeft;
+  const minutes = Math.floor(displayTime / 60);
+  const seconds = displayTime % 60;
+  const progress = isOvertime ? 1 : 1 - (timeLeft / totalTime);
   const circumference = 2 * Math.PI * 35;
-  const strokeDashoffset = circumference * (1 - progress);
+  const strokeDashoffset = isOvertime ? 0 : circumference * (1 - progress);
+  
+  const activeColor = isOvertime ? 'hsl(45, 100%, 60%)' : phaseColors[currentPhase];
 
   return (
     <div
@@ -137,13 +150,24 @@ export function PictureInPicture({
         top: position.y,
       }}
     >
-      <div className="relative w-36 glass-popup p-3 cursor-move"
+      <div 
+        className="relative w-44 rounded-2xl p-3 cursor-move border border-white/10 shadow-2xl"
+        style={{
+          background: isOvertime 
+            ? 'linear-gradient(135deg, hsl(45, 40%, 10%) 0%, hsl(40, 45%, 6%) 100%)'
+            : currentPhase === 'immersion'
+              ? 'linear-gradient(135deg, hsl(195, 50%, 10%) 0%, hsl(200, 55%, 6%) 100%)'
+              : currentPhase === 'dive'
+                ? 'linear-gradient(135deg, hsl(200, 50%, 10%) 0%, hsl(205, 55%, 6%) 100%)'
+                : 'linear-gradient(135deg, hsl(25, 40%, 10%) 0%, hsl(20, 45%, 6%) 100%)',
+          backdropFilter: 'blur(20px)',
+        }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
         {/* Drag handle indicator */}
-        <div className="absolute top-1 left-1/2 -translate-x-1/2">
-          <Move className="w-3 h-3 text-muted-foreground/50" />
+        <div className="absolute top-1.5 left-1/2 -translate-x-1/2">
+          <Move className="w-3 h-3 text-white/30" />
         </div>
         
         {/* Close button */}
@@ -154,11 +178,11 @@ export function PictureInPicture({
           }}
           className="absolute top-2 right-2 w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
         >
-          <X className="w-3 h-3 text-foreground" />
+          <X className="w-3 h-3 text-white" />
         </button>
 
         {/* Timer circle */}
-        <div className="flex flex-col items-center pt-2">
+        <div className="flex flex-col items-center pt-3">
           <div className="relative w-20 h-20">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
               {/* Background circle */}
@@ -176,29 +200,59 @@ export function PictureInPicture({
                 cy="40"
                 r="35"
                 fill="none"
-                stroke={phaseColors[currentPhase]}
+                stroke={activeColor}
                 strokeWidth="4"
                 strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 className="transition-all duration-1000 ease-linear"
                 style={{
-                  filter: `drop-shadow(0 0 6px ${phaseColors[currentPhase]})`,
+                  filter: `drop-shadow(0 0 6px ${activeColor})`,
                 }}
               />
             </svg>
             {/* Time display */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-sm font-bold text-foreground">
+              <span 
+                className="text-lg font-bold"
+                style={{ color: isOvertime ? 'hsl(45, 100%, 75%)' : 'white' }}
+              >
+                {isOvertime && '+'}
                 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
               </span>
             </div>
           </div>
 
           {/* Phase name */}
-          <span className="text-xs text-muted-foreground mt-1 mb-2">
-            {phaseNames[currentPhase]}
+          <span 
+            className="text-xs font-medium uppercase tracking-wide mt-1"
+            style={{ color: activeColor }}
+          >
+            {isOvertime ? '🔥 Overfocus' : phaseNames[currentPhase]}
           </span>
+
+          {/* Now Playing */}
+          {currentTrack && (
+            <div className="flex items-center gap-2 mt-2 px-2 py-1.5 bg-white/5 rounded-lg w-full">
+              {currentTrack.albumArt ? (
+                <img 
+                  src={currentTrack.albumArt} 
+                  alt="Album art"
+                  className="w-6 h-6 rounded"
+                />
+              ) : (
+                <Music className="w-4 h-4 text-green-500" />
+              )}
+              <div className="flex-1 min-w-0 text-[10px] leading-tight">
+                <div className="text-white font-medium truncate">
+                  {currentTrack.name}
+                </div>
+                <div className="text-white/60 truncate">
+                  {currentTrack.artist}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Play/Pause button */}
           <button
@@ -206,12 +260,12 @@ export function PictureInPicture({
               e.stopPropagation();
               onPlayPause();
             }}
-            className="w-8 h-8 rounded-full glass-button flex items-center justify-center"
+            className="w-9 h-9 mt-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-colors"
           >
             {isRunning ? (
-              <Pause className="w-4 h-4 text-foreground" />
+              <Pause className="w-4 h-4 text-white" />
             ) : (
-              <Play className="w-4 h-4 text-foreground ml-0.5" />
+              <Play className="w-4 h-4 text-white ml-0.5" />
             )}
           </button>
         </div>
