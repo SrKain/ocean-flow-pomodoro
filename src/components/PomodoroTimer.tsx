@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSpotify } from "@/hooks/useSpotify";
 import { useSessionSync } from "@/hooks/useSessionSync";
 import { useLandscapeMode } from "@/hooks/useLandscapeMode";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const phaseOrder: Phase[] = ['immersion', 'dive', 'breath'];
 
@@ -58,6 +59,12 @@ export function PomodoroTimer() {
   const { currentTrack } = useSpotify();
   const navigate = useNavigate();
   const { isLandscape } = useLandscapeMode();
+  const { notifyPhaseComplete, notifyOverfocus, notifyCycleComplete, requestPermission } = useNotifications();
+  
+  // Request notification permission on mount
+  useEffect(() => {
+    requestPermission();
+  }, [requestPermission]);
   
   // Check if Document PIP is supported, fallback to regular PIP
   const documentPipSupported = useDocumentPipSupport();
@@ -152,8 +159,10 @@ export function PomodoroTimer() {
       extra_time_seconds: 0,
     });
     
+    // Notify user
+    notifyOverfocus();
     setShowOverfocusPopup(true);
-  }, [updateSession]);
+  }, [updateSession, notifyOverfocus]);
 
   const handleOverfocusDecision = useCallback(async (includeExtraTime: boolean) => {
     setShowOverfocusPopup(false);
@@ -168,12 +177,14 @@ export function PomodoroTimer() {
     if (currentPhase === 'breath' && cycleId) {
       setLastBreathCycleId(cycleId);
       setShowRatingPopup(true);
+      notifyCycleComplete(cycleCount);
     }
     
     const next = getNextPhase(currentPhase);
+    notifyPhaseComplete(currentPhase, next);
     pendingPhaseRef.current = next;
     setShowPopup(true);
-  }, [currentPhase, saveCycle, updateSession]);
+  }, [currentPhase, saveCycle, updateSession, notifyPhaseComplete, notifyCycleComplete, cycleCount]);
 
   const handleSkip = useCallback(async () => {
     updateSession({ is_running: false, is_overtime: false });
@@ -739,6 +750,11 @@ export function PomodoroTimer() {
             extraTime={extraTime}
             onPlayPause={handlePlayPause}
             onSkip={handleSkip}
+            currentTrack={currentTrack ? {
+              name: currentTrack.name,
+              artist: currentTrack.artist,
+              albumArt: currentTrack.albumArt,
+            } : null}
           />
         ) : (
           <PictureInPicture
@@ -748,7 +764,14 @@ export function PomodoroTimer() {
             totalTime={totalTime}
             currentPhase={currentPhase}
             isRunning={isRunning}
+            isOvertime={isOvertime}
+            extraTime={extraTime}
             onPlayPause={handlePlayPause}
+            currentTrack={currentTrack ? {
+              name: currentTrack.name,
+              artist: currentTrack.artist,
+              albumArt: currentTrack.albumArt,
+            } : null}
           />
         )}
       </div>
