@@ -27,10 +27,55 @@ const phaseNames: Record<Phase, string> = {
   breath: 'Respiração',
 };
 
-const phaseColors: Record<Phase, string> = {
-  immersion: 'hsl(195, 85%, 70%)',
-  dive: 'hsl(200, 80%, 65%)',
-  breath: 'hsl(25, 90%, 65%)',
+// Easing function for smoother color transitions
+const easeInOutCubic = (t: number): number => {
+  return t < 0.5 
+    ? 4 * t * t * t 
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+};
+
+// Calculate dynamic colors based on phase and progress
+const getPhaseColors = (phase: Phase, progress: number) => {
+  const easedProgress = easeInOutCubic(progress);
+  
+  if (phase === 'dive') {
+    const hue = 215 - easedProgress * 190;
+    const sat = 50 - easedProgress * 5;
+    const light = 8 + easedProgress * 7;
+    return { hue, sat, light };
+  }
+  
+  if (phase === 'breath') {
+    const hue = 25 + easedProgress * 175;
+    const sat = 45 + easedProgress * 5;
+    const light = 15 - easedProgress * 3;
+    return { hue, sat, light };
+  }
+  
+  if (phase === 'immersion') {
+    const hue = 200 + easedProgress * 15;
+    const sat = 50;
+    const light = 12 - easedProgress * 4;
+    return { hue, sat, light };
+  }
+  
+  return { hue: 215, sat: 50, light: 8 };
+};
+
+const getBackgroundGradient = (phase: Phase, progress: number, isOvertime: boolean) => {
+  if (isOvertime) {
+    return 'linear-gradient(135deg, hsl(45, 40%, 10%) 0%, hsl(40, 45%, 6%) 100%)';
+  }
+  const { hue, sat, light } = getPhaseColors(phase, progress);
+  return `linear-gradient(135deg, hsl(${hue}, ${sat}%, ${light}%) 0%, hsl(${hue + 5}, ${sat + 5}%, ${Math.max(4, light - 4)}%) 100%)`;
+};
+
+const getRingColor = (phase: Phase, progress: number, isOvertime: boolean) => {
+  if (isOvertime) {
+    return 'hsl(45, 100%, 60%)';
+  }
+  const { hue, sat } = getPhaseColors(phase, progress);
+  return `hsl(${hue}, ${Math.min(90, sat + 30)}%, 60%)`;
 };
 
 export function PictureInPicture({
@@ -139,7 +184,8 @@ export function PictureInPicture({
   const circumference = 2 * Math.PI * 35;
   const strokeDashoffset = isOvertime ? 0 : circumference * (1 - progress);
   
-  const activeColor = isOvertime ? 'hsl(45, 100%, 60%)' : phaseColors[currentPhase];
+  const backgroundGradient = getBackgroundGradient(currentPhase, progress, isOvertime || false);
+  const activeColor = getRingColor(currentPhase, progress, isOvertime || false);
 
   return (
     <div
@@ -153,14 +199,9 @@ export function PictureInPicture({
       <div 
         className="relative w-44 rounded-2xl p-3 cursor-move border border-white/10 shadow-2xl"
         style={{
-          background: isOvertime 
-            ? 'linear-gradient(135deg, hsl(45, 40%, 10%) 0%, hsl(40, 45%, 6%) 100%)'
-            : currentPhase === 'immersion'
-              ? 'linear-gradient(135deg, hsl(195, 50%, 10%) 0%, hsl(200, 55%, 6%) 100%)'
-              : currentPhase === 'dive'
-                ? 'linear-gradient(135deg, hsl(200, 50%, 10%) 0%, hsl(205, 55%, 6%) 100%)'
-                : 'linear-gradient(135deg, hsl(25, 40%, 10%) 0%, hsl(20, 45%, 6%) 100%)',
+          background: backgroundGradient,
           backdropFilter: 'blur(20px)',
+          transition: 'background 0.3s ease',
         }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
