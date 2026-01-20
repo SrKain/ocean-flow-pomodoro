@@ -27,19 +27,20 @@ export function PolarRing({
       className={cn("polar-ring transform -rotate-90", className)}
       style={{ overflow: 'visible' }}
     >
-      {/* Glow filter definition */}
+      {/* Glow filter definition - using circular primitives for smooth glow */}
       <defs>
-        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+        <filter id="glow" filterUnits="userSpaceOnUse" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="coloredBlur" />
           <feMerge>
             <feMergeNode in="coloredBlur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-        <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="8" result="blur" />
+        <filter id="softGlow" filterUnits="userSpaceOnUse" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur" />
+          <feColorMatrix in="blur" type="saturate" values="1.5" result="saturatedBlur" />
           <feMerge>
-            <feMergeNode in="blur" />
+            <feMergeNode in="saturatedBlur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
