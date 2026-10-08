@@ -4,6 +4,7 @@ export interface PomodoroSettings {
   immersionMinutes: number;
   diveMinutes: number;
   breathMinutes: number;
+  autoAdvance: boolean;
 }
 
 export interface CycleRecord {
@@ -40,6 +41,7 @@ const defaultSettings: PomodoroSettings = {
   immersionMinutes: 25,
   diveMinutes: 5,
   breathMinutes: 5,
+  autoAdvance: false,
 };
 
 export function getSettings(): PomodoroSettings {
@@ -47,7 +49,7 @@ export function getSettings(): PomodoroSettings {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const state: PomodoroState = JSON.parse(stored);
-      return state.settings || defaultSettings;
+      return { ...defaultSettings, ...state.settings, autoAdvance: state.settings?.autoAdvance ?? false };
     }
   } catch (e) {
     console.error('Error reading settings:', e);

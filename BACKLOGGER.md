@@ -46,8 +46,25 @@
 
 ## 2. Tarefas em Andamento
 
-*Nenhuma tarefa em andamento no momento.*
+*Registro anterior à aprovação de BL-011 em 2026-10-08: nenhuma tarefa em andamento.*
 *(Nota de Governança: Nenhuma ação é iniciada sem aprovação prévia expressa do usuário).*
+
+### BL-011 — Reforma Imersiva de UI/UX e Timer do Ocean Flow
+- **Status**: Em andamento
+- **Tipo**: Produto / Frontend / Timer / Persistência
+- **Solicitado por**: Usuário
+- **Data de Início**: 2026-10-08
+- **Descrição**: Implementar o plano aprovado para tornar o Pomodoro a experiência principal mobile-first, fortalecer a engine temporal e recuperação/sincronização sem persistência por tick, organizar estados/transições e edição de duração, refinar Spotify e analytics, Dashboard, Daily Review, Settings, PiP e acessibilidade. Preservar funcionalidades, identidade oceânica, registros remotos/locais, suporte offline e integrações existentes. Recursos Spotify adicionais dependem da validação de API/escopos atuais.
+- **Escopo/Fases**:
+  - Fase 1: engine temporal, persistência compatível, estados, controles, edição de duração e avanço automático.
+  - Fase 2: home imersiva, fullscreen responsivo, background e PolarRing.
+  - Fase 3: Now Playing e analytics Spotify; controles adicionais somente se suportados.
+  - Fase 4: Dashboard e Daily Review.
+  - Fase 5: Settings.
+  - Fase 6: PiP, acessibilidade e edge cases.
+- **Documentos/Funcionalidades Relacionados**: CERME MEC-001 a MEC-026; atualização final do CERME e STORY após validação.
+- **Histórico**:
+  - 2026-10-08: plano aprovado explicitamente pelo usuário; execução iniciada pela Fase 1.
 
 ---
 

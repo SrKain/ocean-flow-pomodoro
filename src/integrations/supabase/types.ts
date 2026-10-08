@@ -27,6 +27,11 @@ export type Database = {
           total_time: number
           updated_at: string
           user_id: string
+          end_at: string | null
+          paused_at: string | null
+          remaining_when_paused: number | null
+          overtime_started_at: string | null
+          timer_status: string
         }
         Insert: {
           current_phase?: string
@@ -40,6 +45,11 @@ export type Database = {
           total_time?: number
           updated_at?: string
           user_id: string
+          end_at?: string | null
+          paused_at?: string | null
+          remaining_when_paused?: number | null
+          overtime_started_at?: string | null
+          timer_status?: string
         }
         Update: {
           current_phase?: string
@@ -53,6 +63,11 @@ export type Database = {
           total_time?: number
           updated_at?: string
           user_id?: string
+          end_at?: string | null
+          paused_at?: string | null
+          remaining_when_paused?: number | null
+          overtime_started_at?: string | null
+          timer_status?: string
         }
         Relationships: []
       }
@@ -166,6 +181,7 @@ export type Database = {
       }
       pomodoro_settings: {
         Row: {
+          auto_advance: boolean
           breath_minutes: number
           created_at: string
           dive_minutes: number
@@ -175,6 +191,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          auto_advance?: boolean
           breath_minutes?: number
           created_at?: string
           dive_minutes?: number
@@ -184,6 +201,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          auto_advance?: boolean
           breath_minutes?: number
           created_at?: string
           dive_minutes?: number

@@ -145,6 +145,21 @@ export default function Settings() {
             </label>
           </div>
 
+          <div className="glass rounded-2xl p-5">
+            <label className="flex min-h-12 cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                checked={settings.autoAdvance}
+                onChange={(event) => setSettings((current) => current ? ({ ...current, autoAdvance: event.target.checked }) : current)}
+                className="h-5 w-5 accent-sky-400"
+              />
+              <span>
+                <span className="block font-medium text-foreground">Avançar automaticamente</span>
+                <span className="block text-sm text-muted-foreground">Inicia a próxima fase após uma contagem breve.</span>
+              </span>
+            </label>
+          </div>
+
           {/* Info */}
           <div className="glass rounded-2xl p-6 border-dashed border-white/10">
             <h3 className="text-foreground font-medium mb-3">📌 Fluxo das Fases</h3>

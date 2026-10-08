@@ -12,8 +12,8 @@ html {
   background: #020b14;
 }
 
-html, body, #root {
-  width: 100vw;
+html, body {
+  width: 100%;
   min-height: 100dvh;
   margin: 0;
   padding: 0;
@@ -23,13 +23,6 @@ body {
   min-height: 100dvh;
   background: #020b14;
   overflow-x: hidden;
-}
-
-#root {
-  width: 100vw;
-  min-height: 100dvh;
-  display: block;
-  isolation: isolate;
 }
 
 button,

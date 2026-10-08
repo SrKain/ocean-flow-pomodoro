@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Settings, BarChart3, LogOut, CheckCircle, Calendar, Minimize2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Settings, BarChart3, LogOut, CheckCircle, Calendar, Minimize2, Menu, ClipboardList } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Phase, saveCycleRecordAsync, updateCycleRatingAsync } from "@/lib/database";
@@ -17,12 +17,15 @@ import { MissionsWidget } from "./MissionsWidget";
 import { DocumentPictureInPicture, useDocumentPipSupport } from "./DocumentPictureInPicture";
 import { PictureInPicture } from "./PictureInPicture";
 import { OverfocusPopup } from "./OverfocusPopup";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useAuth } from "@/hooks/useAuth";
 import { useSpotify } from "@/hooks/useSpotify";
 import { useSessionSync } from "@/hooks/useSessionSync";
 import { useLandscapeMode } from "@/hooks/useLandscapeMode";
 import { useNotifications } from "@/hooks/useNotifications";
+import { getOvertimeSeconds, getRemainingSeconds, TimerClock } from "@/lib/timerEngine";
 
 const phaseOrder: Phase[] = ['immersion', 'dive', 'breath'];
 
@@ -45,15 +48,22 @@ export function PomodoroTimer() {
   const [showMissionsPopup, setShowMissionsPopup] = useState(false);
   const [showPip, setShowPip] = useState(false);
   const [showOverfocusPopup, setShowOverfocusPopup] = useState(false);
+  const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
+  const [transitionCountdown, setTransitionCountdown] = useState<number | null>(null);
+  const [pendingPhase, setPendingPhase] = useState<Phase | null>(null);
+  const [showNavigation, setShowNavigation] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [diveTags, setDiveTags] = useState<Tag[]>([]);
   const [breathTags, setBreathTags] = useState<BreathTag[]>([]);
   const [diveNotes, setDiveNotes] = useState('');
   const [lastBreathCycleId, setLastBreathCycleId] = useState<string | null>(null);
   const [glowPhase, setGlowPhase] = useState(0); // For pulsing glow animation
-  
+  const [liveTimeLeft, setLiveTimeLeft] = useState<number>(0);
+  const [liveExtraTime, setLiveExtraTime] = useState<number>(0);
+
   const startTimeRef = useRef<string | null>(null);
   const pendingPhaseRef = useRef<Phase | null>(null);
+  const completionHandledRef = useRef(false);
   
   const { signOut } = useAuth();
   const { currentTrack } = useSpotify();
@@ -74,12 +84,21 @@ export function PomodoroTimer() {
 
   // Derived state from session
   const currentPhase = (session?.current_phase as Phase) || 'immersion';
-  const timeLeft = session?.time_left || 0;
   const totalTime = session?.total_time || (settings?.immersionMinutes || 25) * 60;
   const isRunning = session?.is_running || false;
   const cycleCount = session?.cycle_count || 0;
   const isOvertime = session?.is_overtime || false;
-  const extraTime = session?.extra_time_seconds || 0;
+  const extraTime = isOvertime ? liveExtraTime : (session?.extra_time_seconds || 0);
+  const timeLeft = isRunning && !isOvertime ? liveTimeLeft : (session?.time_left ?? liveTimeLeft ?? 0);
+  const timerClock = useMemo<TimerClock>(() => ({
+    duration: totalTime,
+    startedAt: session?.started_at ? new Date(session.started_at).getTime() : null,
+    endAt: session?.end_at ? new Date(session.end_at).getTime() : null,
+    pausedAt: session?.paused_at ? new Date(session.paused_at).getTime() : null,
+    remainingWhenPaused: session?.remaining_when_paused ?? session?.time_left ?? totalTime,
+    status: session?.timer_status ?? (isOvertime ? 'overtime' : isRunning ? 'running' : 'idle'),
+    overtimeStartedAt: session?.overtime_started_at ? new Date(session.overtime_started_at).getTime() : null,
+  }), [isOvertime, isRunning, session?.end_at, session?.overtime_started_at, session?.paused_at, session?.remaining_when_paused, session?.started_at, session?.time_left, session?.timer_status, totalTime]);
 
   const getPhaseTime = useCallback((phase: Phase) => {
     if (!settings) return 25 * 60;
@@ -95,7 +114,7 @@ export function PomodoroTimer() {
     return phaseOrder[(currentIndex + 1) % phaseOrder.length];
   };
 
-  const saveCycle = useCallback(async (completed: boolean): Promise<string | null> => {
+  const saveCycle = useCallback(async (completed: boolean, endTime?: string): Promise<string | null> => {
     if (startTimeRef.current) {
       const immersionTagNames = selectedTags.map(t => t.name).join(', ');
       const diveTagNames = diveTags.map(t => t.name).join(', ');
@@ -120,7 +139,7 @@ export function PomodoroTimer() {
       const cycleId = await saveCycleRecordAsync({
         phase: currentPhase,
         startTime: startTimeRef.current,
-        endTime: new Date().toISOString(),
+        endTime: endTime ?? new Date().toISOString(),
         tag: tagValue,
         actions: actionsValue,
         completed,
@@ -136,7 +155,10 @@ export function PomodoroTimer() {
 
   const startPhase = useCallback((phase: Phase) => {
     const time = getPhaseTime(phase);
-    startTimeRef.current = new Date().toISOString();
+    const now = Date.now();
+    startTimeRef.current = new Date(now).toISOString();
+    completionHandledRef.current = false;
+    setLiveExtraTime(0);
     
     updateSession({
       current_phase: phase,
@@ -144,6 +166,11 @@ export function PomodoroTimer() {
       total_time: time,
       is_running: true,
       started_at: startTimeRef.current,
+      end_at: new Date(now + time * 1000).toISOString(),
+      paused_at: null,
+      remaining_when_paused: time,
+      overtime_started_at: null,
+      timer_status: 'running',
       is_overtime: false,
       extra_time_seconds: 0,
       cycle_count: phase === 'immersion' ? cycleCount + 1 : cycleCount,
@@ -152,27 +179,82 @@ export function PomodoroTimer() {
     setShowPopup(false);
   }, [getPhaseTime, updateSession, cycleCount]);
 
+  const queueNextPhase = useCallback((phase: Phase) => {
+    pendingPhaseRef.current = phase;
+    setPendingPhase(phase);
+    if (settings?.autoAdvance) {
+      setShowPopup(false);
+      setTransitionCountdown(3);
+    } else {
+      setShowPopup(true);
+    }
+  }, [settings?.autoAdvance]);
+
   const handlePhaseComplete = useCallback(async () => {
+    if (completionHandledRef.current) return;
+    completionHandledRef.current = true;
+    setLiveTimeLeft(0);
+    const deadline = session?.end_at
+      ? new Date(session.end_at)
+      : new Date((session?.started_at ? new Date(session.started_at).getTime() : Date.now()) + (session?.time_left ?? totalTime) * 1000);
+
+    if (currentPhase === 'dive') {
+      setLiveExtraTime(0);
+      updateSession({
+        time_left: 0,
+        end_at: null,
+        is_overtime: true,
+        is_running: true,
+        started_at: null,
+        paused_at: null,
+        remaining_when_paused: 0,
+        overtime_started_at: deadline.toISOString(),
+        timer_status: 'overtime',
+        extra_time_seconds: 0,
+      });
+      notifyOverfocus();
+      setShowOverfocusPopup(true);
+      return;
+    }
+
     updateSession({
-      is_overtime: true,
-      is_running: true,
-      extra_time_seconds: 0,
+      time_left: 0,
+      end_at: null,
+      is_running: false,
+      started_at: null,
+      paused_at: null,
+      remaining_when_paused: 0,
+      overtime_started_at: null,
+      timer_status: 'completed',
     });
-    
-    // Notify user
-    notifyOverfocus();
-    setShowOverfocusPopup(true);
-  }, [updateSession, notifyOverfocus]);
+    const cycleId = await saveCycle(true, deadline.toISOString());
+    if (currentPhase === 'breath' && cycleId) {
+      setLastBreathCycleId(cycleId);
+      setShowRatingPopup(true);
+      notifyCycleComplete(cycleCount);
+    }
+    const next = getNextPhase(currentPhase);
+    notifyPhaseComplete(currentPhase, next);
+    queueNextPhase(next);
+  }, [currentPhase, cycleCount, notifyCycleComplete, notifyOverfocus, notifyPhaseComplete, queueNextPhase, saveCycle, session?.end_at, session?.started_at, session?.time_left, totalTime, updateSession]);
 
   const handleOverfocusDecision = useCallback(async (includeExtraTime: boolean) => {
     setShowOverfocusPopup(false);
+    const regularEnd = session?.overtime_started_at ?? new Date().toISOString();
+    const recordEnd = includeExtraTime ? new Date().toISOString() : regularEnd;
     
     updateSession({
       is_running: false,
       is_overtime: false,
+      end_at: null,
+      started_at: null,
+      paused_at: null,
+      remaining_when_paused: 0,
+      overtime_started_at: null,
+      timer_status: 'completed',
     });
     
-    const cycleId = await saveCycle(true);
+    const cycleId = await saveCycle(true, recordEnd);
     
     if (currentPhase === 'breath' && cycleId) {
       setLastBreathCycleId(cycleId);
@@ -182,21 +264,37 @@ export function PomodoroTimer() {
     
     const next = getNextPhase(currentPhase);
     notifyPhaseComplete(currentPhase, next);
-    pendingPhaseRef.current = next;
-    setShowPopup(true);
-  }, [currentPhase, saveCycle, updateSession, notifyPhaseComplete, notifyCycleComplete, cycleCount]);
+    queueNextPhase(next);
+  }, [currentPhase, saveCycle, session?.overtime_started_at, updateSession, notifyPhaseComplete, notifyCycleComplete, cycleCount, queueNextPhase]);
 
   const handleSkip = useCallback(async () => {
-    updateSession({ is_running: false, is_overtime: false });
+    completionHandledRef.current = true;
+    updateSession({
+      is_running: false,
+      is_overtime: false,
+      end_at: null,
+      started_at: null,
+      paused_at: null,
+      overtime_started_at: null,
+      timer_status: 'completed',
+    });
     await saveCycle(false);
     
     const next = getNextPhase(currentPhase);
-    pendingPhaseRef.current = next;
-    setShowPopup(true);
-  }, [currentPhase, saveCycle, updateSession]);
+    queueNextPhase(next);
+  }, [currentPhase, saveCycle, updateSession, queueNextPhase]);
 
   const handleCompleteCycle = useCallback(async () => {
-    updateSession({ is_running: false, is_overtime: false });
+    completionHandledRef.current = true;
+    updateSession({
+      is_running: false,
+      is_overtime: false,
+      end_at: null,
+      started_at: null,
+      paused_at: null,
+      overtime_started_at: null,
+      timer_status: 'completed',
+    });
     const cycleId = await saveCycle(true);
     
     if (currentPhase === 'breath' && cycleId) {
@@ -205,29 +303,62 @@ export function PomodoroTimer() {
     }
     
     const next = getNextPhase(currentPhase);
-    pendingPhaseRef.current = next;
-    setShowPopup(true);
-  }, [currentPhase, saveCycle, updateSession]);
+    queueNextPhase(next);
+  }, [currentPhase, saveCycle, updateSession, queueNextPhase]);
 
   const handlePlayPause = useCallback(() => {
-    if (!isRunning && !startTimeRef.current) {
-      startTimeRef.current = new Date().toISOString();
+    const now = Date.now();
+    const remainingNow = Math.max(0, isRunning ? getRemainingSeconds(timerClock, now) : liveTimeLeft || session?.time_left || getPhaseTime(currentPhase));
+
+    if (isRunning) {
+      setLiveTimeLeft(remainingNow);
+      updateSession({
+        is_running: false,
+        started_at: session?.started_at ?? new Date(now).toISOString(),
+        end_at: null,
+        paused_at: new Date(now).toISOString(),
+        remaining_when_paused: remainingNow,
+        timer_status: 'paused',
+        time_left: remainingNow,
+        total_time: totalTime || remainingNow,
+      });
+      return;
     }
-    updateSession({ 
-      is_running: !isRunning,
-      started_at: !isRunning ? new Date().toISOString() : session?.started_at,
+
+    const nextStartedAt = new Date(now).toISOString();
+    if (!startTimeRef.current) startTimeRef.current = nextStartedAt;
+    completionHandledRef.current = false;
+    setLiveTimeLeft(remainingNow);
+    updateSession({
+      is_running: true,
+      started_at: nextStartedAt,
+      end_at: new Date(now + remainingNow * 1000).toISOString(),
+      paused_at: null,
+      remaining_when_paused: remainingNow,
+      timer_status: 'running',
+      time_left: remainingNow,
+      total_time: totalTime || remainingNow,
     });
-  }, [isRunning, updateSession, session?.started_at]);
+  }, [currentPhase, getPhaseTime, isRunning, liveTimeLeft, session?.started_at, session?.time_left, timerClock, totalTime, updateSession]);
 
   const handleContinue = () => {
+    setTransitionCountdown(null);
     if (pendingPhaseRef.current) {
       startPhase(pendingPhaseRef.current);
       pendingPhaseRef.current = null;
+      setPendingPhase(null);
     }
   };
 
   const handleWait = () => {
+    setTransitionCountdown(null);
     setShowPopup(false);
+    updateSession({ timer_status: 'transition' });
+  };
+
+  const confirmSkip = async () => {
+    setShowSkipConfirmation(false);
+    await handleSkip();
   };
 
   const handleRatingSubmit = async (rating: number) => {
@@ -250,10 +381,18 @@ export function PomodoroTimer() {
 
   const handleReset = useCallback(() => {
     const phaseDuration = getPhaseTime(currentPhase);
+    completionHandledRef.current = false;
+    setLiveExtraTime(0);
+    setLiveTimeLeft(phaseDuration);
     updateSession({
       time_left: phaseDuration,
       total_time: phaseDuration,
       started_at: null,
+      end_at: null,
+      paused_at: null,
+      remaining_when_paused: phaseDuration,
+      overtime_started_at: null,
+      timer_status: 'idle',
       is_running: false,
       is_overtime: false,
       extra_time_seconds: 0,
@@ -261,36 +400,103 @@ export function PomodoroTimer() {
   }, [currentPhase, getPhaseTime, updateSession]);
 
   const handleTimeChange = useCallback((newTimeSeconds: number) => {
+    completionHandledRef.current = false;
+    setLiveTimeLeft(newTimeSeconds);
     updateSession({
       time_left: newTimeSeconds,
       total_time: newTimeSeconds,
+      started_at: null,
+      end_at: null,
+      paused_at: null,
+      remaining_when_paused: newTimeSeconds,
+      overtime_started_at: null,
+      timer_status: 'idle',
+      is_running: false,
+      is_overtime: false,
     });
   }, [updateSession]);
 
+  useEffect(() => {
+    if (!session) return;
+    if (session.started_at && !startTimeRef.current) startTimeRef.current = session.started_at;
+    if (session.is_overtime && session.overtime_started_at) {
+      setLiveExtraTime(getOvertimeSeconds({ ...timerClock, status: 'overtime' }));
+    } else if (!session.is_running) {
+      setLiveTimeLeft(session.remaining_when_paused ?? session.time_left ?? 0);
+    }
+  }, [session, timerClock]);
+
   // Timer countdown
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || isOvertime || (!session?.end_at && !session?.started_at)) return;
 
-    const interval = setInterval(() => {
-      if (isOvertime) {
-        updateSession({ extra_time_seconds: extraTime + 1 });
-      } else if (timeLeft <= 1) {
+    const tick = () => {
+      const endAt = session.end_at
+        ? new Date(session.end_at).getTime()
+        : new Date(session.started_at!).getTime() + (session.time_left ?? totalTime) * 1000;
+      const next = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+      setLiveTimeLeft(next);
+
+      if (next <= 0) {
         handlePhaseComplete();
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 250);
+    return () => clearInterval(interval);
+  }, [isRunning, isOvertime, session?.end_at, session?.started_at, session?.time_left, totalTime, handlePhaseComplete]);
+
+  useEffect(() => {
+    if (!isOvertime || !session?.overtime_started_at) return;
+
+    const tick = () => {
+      setLiveExtraTime(getOvertimeSeconds({ ...timerClock, status: 'overtime' }));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [isOvertime, session?.overtime_started_at, timerClock]);
+
+  useEffect(() => {
+    if (transitionCountdown === null) return;
+
+    const timeout = setTimeout(() => {
+      if (transitionCountdown <= 1) {
+        const nextPhase = pendingPhaseRef.current;
+        setTransitionCountdown(null);
+        if (nextPhase) {
+          pendingPhaseRef.current = null;
+          startPhase(nextPhase);
+        }
       } else {
-        updateSession({ time_left: timeLeft - 1 });
+        setTransitionCountdown((current) => current === null ? null : current - 1);
       }
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [isRunning, timeLeft, isOvertime, extraTime, handlePhaseComplete, updateSession]);
+    return () => clearTimeout(timeout);
+  }, [transitionCountdown, startPhase]);
+
+  const cancelAutoAdvance = () => {
+    setTransitionCountdown(null);
+    setShowPopup(true);
+  };
+
+  const startPendingPhase = () => {
+    if (!pendingPhase) return;
+    startPhase(pendingPhase);
+    pendingPhaseRef.current = null;
+    setPendingPhase(null);
+  };
 
   // Pulsing glow animation
   useEffect(() => {
+    if (!isRunning || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const interval = setInterval(() => {
       setGlowPhase(prev => (prev + 0.05) % (Math.PI * 2));
     }, 50);
     return () => clearInterval(interval);
-  }, []);
+  }, [isRunning]);
 
   const displayMinutes = isOvertime 
     ? Math.floor(extraTime / 60) 
@@ -358,11 +564,15 @@ export function PomodoroTimer() {
   // Calculate background style based on phase and progress with pulsing glow
   const getBackgroundStyle = () => {
     const { hue, sat, light } = getPhaseColors();
-    
-    // Create a subtle pulsing radial glow effect using glowPhase state
-    const glowOpacity = 0.12 + Math.sin(glowPhase) * 0.06; // Subtle pulse between 0.06-0.18
-    const glowSize = 75 + Math.sin(glowPhase * 0.7) * 10; // Size pulse 65%-85%
+    const glowOpacity = isRunning ? 0.12 + Math.sin(glowPhase) * 0.06 : 0.08;
+    const glowSize = isRunning ? 75 + Math.sin(glowPhase * 0.7) * 10 : 70;
     const glowLight = Math.min(75, light + 35);
+
+    if (isOvertime) {
+      return {
+        background: 'radial-gradient(ellipse 70% 50% at 50% 35%, hsla(45, 90%, 55%, 0.14) 0%, transparent 70%), linear-gradient(180deg, hsl(38, 30%, 10%) 0%, hsl(220, 45%, 5%) 100%)',
+      };
+    }
     
     return {
       background: `
@@ -371,6 +581,36 @@ export function PomodoroTimer() {
       `
     };
   };
+
+  const mobileNavigation = (
+    <Sheet open={showNavigation} onOpenChange={setShowNavigation}>
+      <SheetContent side="right" className="glass-popup w-[min(84vw,20rem)] border-white/10 pb-[max(env(safe-area-inset-bottom),1.5rem)] pl-[max(env(safe-area-inset-left),1.5rem)] pr-[max(env(safe-area-inset-right),1.5rem)] pt-[max(env(safe-area-inset-top),1.5rem)]">
+        <SheetHeader>
+          <SheetTitle>Ocean Flow</SheetTitle>
+        </SheetHeader>
+        <nav className="mt-6 flex flex-col gap-2">
+          <Link onClick={() => setShowNavigation(false)} to="/summary" className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-foreground hover:bg-white/5">
+            <Calendar className="h-5 w-5" />Resumo
+          </Link>
+          <Link onClick={() => setShowNavigation(false)} to="/dashboard" className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-foreground hover:bg-white/5">
+            <BarChart3 className="h-5 w-5" />Dashboard
+          </Link>
+          <Link onClick={() => setShowNavigation(false)} to="/settings" className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-foreground hover:bg-white/5">
+            <Settings className="h-5 w-5" />Configurações
+          </Link>
+          <button onClick={() => { setShowNavigation(false); setShowMissionsPopup(true); }} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-left text-foreground hover:bg-white/5">
+            <ClipboardList className="h-5 w-5" />Missões
+          </button>
+          <button onClick={() => { setShowNavigation(false); setShowPip(true); }} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-left text-foreground hover:bg-white/5">
+            <Minimize2 className="h-5 w-5" />Picture-in-Picture
+          </button>
+          <button onClick={handleLogout} className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-left text-foreground hover:bg-white/5">
+            <LogOut className="h-5 w-5" />Sair
+          </button>
+        </nav>
+      </SheetContent>
+    </Sheet>
+  );
 
   if (loading || !settings) {
     return (
@@ -384,10 +624,10 @@ export function PomodoroTimer() {
   if (isLandscape) {
     return (
       <div 
-        className="min-h-screen transition-all duration-1000 ease-in-out"
+        className="min-h-[100dvh] w-full transition-all duration-1000 ease-in-out"
         style={getBackgroundStyle()}
       >
-        <div className="relative min-h-screen flex items-center justify-between px-6 py-4 z-10">
+        <div className="relative z-10 flex min-h-[100dvh] w-full items-center justify-between px-[max(env(safe-area-inset-left),1.5rem)] py-4 pr-[max(env(safe-area-inset-right),1.5rem)]">
           {/* Left side - Timer */}
           <div className="flex flex-col items-center justify-center flex-1">
             {/* Phase indicator */}
@@ -398,6 +638,9 @@ export function PomodoroTimer() {
               )}>
                 {isOvertime ? '🔥 Overfocus' : phaseNames[currentPhase]}
               </span>
+              <p className="mt-1 text-xs text-foreground/60">
+                {isOvertime ? 'Tempo extra' : isRunning ? 'Em foco' : pendingPhase ? 'Ciclo concluído' : session?.timer_status === 'paused' ? 'Pausado' : 'Pronto'}
+              </p>
             </div>
 
             {/* Timer with Polar Ring */}
@@ -426,7 +669,8 @@ export function PomodoroTimer() {
               <ControlButtons
                 isRunning={isRunning}
                 onPlayPause={handlePlayPause}
-                onSkip={handleSkip}
+                onSkip={() => setShowSkipConfirmation(true)}
+                onReset={handleReset}
                 compact
               />
               
@@ -440,6 +684,15 @@ export function PomodoroTimer() {
                 </button>
               )}
             </div>
+            {pendingPhase && !showPopup && transitionCountdown === null && (
+              <div className="glass mt-3 flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Próxima fase</p>
+                  <p className="font-medium text-foreground">{phaseNames[pendingPhase]} · {Math.round(getPhaseTime(pendingPhase) / 60)} min</p>
+                </div>
+                <button onClick={startPendingPhase} className="min-h-11 rounded-xl bg-primary px-4 font-medium text-primary-foreground">Começar</button>
+              </div>
+            )}
           </div>
 
           {/* Right side - Info Panel */}
@@ -454,44 +707,39 @@ export function PomodoroTimer() {
             <NowPlaying compact />
 
             {/* Phase-specific inputs */}
-            <div className="w-full animate-slide-up">
-              {currentPhase === 'immersion' && (
-                <TagSelector
-                  selectedTags={selectedTags}
-                  onTagsChange={setSelectedTags}
-                  compact
-                />
-              )}
-              {currentPhase === 'dive' && (
-                <DiveTagSelector
-                  selectedTags={diveTags}
-                  onTagsChange={setDiveTags}
-                  notes={diveNotes}
-                  onNotesChange={setDiveNotes}
-                  compact
-                />
-              )}
-              {currentPhase === 'breath' && (
-                <div className="space-y-2">
-                  <div className="text-center">
-                    <span className="text-2xl">🌊</span>
-                    <p className="text-sm text-foreground/80 font-medium">Descanso</p>
+            {!isRunning && (
+              <div className="w-full animate-slide-up">
+                {currentPhase === 'immersion' && (
+                  <TagSelector selectedTags={selectedTags} onTagsChange={setSelectedTags} compact />
+                )}
+                {currentPhase === 'dive' && (
+                  <DiveTagSelector selectedTags={diveTags} onTagsChange={setDiveTags} notes={diveNotes} onNotesChange={setDiveNotes} compact />
+                )}
+                {currentPhase === 'breath' && (
+                  <div className="space-y-2">
+                    <div className="text-center">
+                      <span className="text-2xl">🌊</span>
+                      <p className="text-sm text-foreground/80 font-medium">Descanso</p>
+                    </div>
+                    <BreathTagSelector selectedTags={breathTags} onTagsChange={setBreathTags} compact />
                   </div>
-                  <BreathTagSelector
-                    selectedTags={breathTags}
-                    onTagsChange={setBreathTags}
-                    compact
-                  />
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Missions widget */}
-            <MissionsWidget onClick={() => setShowMissionsPopup(true)} compact />
+            {!isRunning && <MissionsWidget onClick={() => setShowMissionsPopup(true)} compact />}
           </div>
 
           {/* Top right buttons */}
-          <div className="absolute top-3 right-4 flex gap-2">
+          <button
+            onClick={() => setShowNavigation(true)}
+            className="absolute right-[max(env(safe-area-inset-right),1rem)] top-[max(env(safe-area-inset-top),0.75rem)] z-20 flex h-11 w-11 items-center justify-center rounded-full glass-button md:hidden"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5 text-foreground" />
+          </button>
+          <div className="absolute right-4 top-3 hidden gap-2 md:flex">
             <button
               onClick={() => setShowPip(true)}
               className="w-10 h-10 rounded-full glass-button flex items-center justify-center"
@@ -529,6 +777,7 @@ export function PomodoroTimer() {
             </button>
           </div>
         </div>
+        {mobileNavigation}
 
         {/* Popups */}
         <PhasePopup
@@ -548,6 +797,25 @@ export function PomodoroTimer() {
           onInclude={() => handleOverfocusDecision(true)}
           onDiscard={() => handleOverfocusDecision(false)}
         />
+        <Dialog open={showSkipConfirmation} onOpenChange={setShowSkipConfirmation}>
+          <DialogContent className="glass-popup max-w-sm border-white/10 text-center">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Pular {phaseNames[currentPhase]}?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">Esta fase será registrada como não concluída.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowSkipConfirmation(false)} className="glass-button min-h-11 flex-1 text-foreground">Continuar</button>
+              <button onClick={confirmSkip} className="min-h-11 flex-1 rounded-xl bg-destructive/20 text-destructive">Descartar fase</button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        {transitionCountdown !== null && (
+          <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/20 backdrop-blur-sm" role="status" aria-live="polite">
+            <p className="text-sm font-medium uppercase tracking-widest text-foreground/80">Próxima fase</p>
+            <span className="text-6xl font-light text-foreground" aria-label={`Começa em ${transitionCountdown} segundos`}>{transitionCountdown}</span>
+            <button onClick={cancelAutoAdvance} className="glass-button min-h-11 px-5 text-sm text-foreground">Escolher depois</button>
+          </div>
+        )}
         <MissionsPopup
           isOpen={showMissionsPopup}
           onClose={() => setShowMissionsPopup(false)}
@@ -586,7 +854,7 @@ export function PomodoroTimer() {
       className="focus-shell transition-all duration-1000 ease-in-out"
       style={getBackgroundStyle()}
     >
-      <div className="relative z-10 flex min-h-[100dvh] w-full flex-col px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-[max(env(safe-area-inset-top),0.75rem)] sm:px-6">
+      <div className="relative z-10 flex min-h-[100dvh] w-full flex-col pb-[max(env(safe-area-inset-bottom),1rem)] pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.75rem)] sm:px-6">
         <header className="mb-2 flex w-full items-center justify-between gap-3">
           <div className="glass flex items-center gap-2 rounded-full border border-white/10 px-3 py-2">
             <span className="text-[10px] font-medium uppercase tracking-[0.24em] text-sky-100/80">
@@ -594,7 +862,7 @@ export function PomodoroTimer() {
             </span>
           </div>
 
-          <nav className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/20 p-1.5 backdrop-blur-xl">
+          <nav className="hidden items-center gap-2 rounded-full border border-white/10 bg-slate-900/20 p-1.5 backdrop-blur-xl md:flex">
             <Link
               to="/summary"
               className="flex h-9 w-9 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/5 hover:text-white"
@@ -636,7 +904,16 @@ export function PomodoroTimer() {
               <LogOut className="h-4 w-4" />
             </button>
           </nav>
+          <button
+            onClick={() => setShowNavigation(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-full glass-button md:hidden"
+            aria-label="Abrir menu"
+            title="Abrir menu"
+          >
+            <Menu className="h-5 w-5 text-foreground" />
+          </button>
         </header>
+        {mobileNavigation}
 
         <main className="flex flex-1 flex-col items-center justify-center pb-4 pt-2">
           <div className="mb-6 flex w-full max-w-xs items-center justify-between gap-3">
@@ -647,6 +924,9 @@ export function PomodoroTimer() {
               {isOvertime ? 'Overfocus' : phaseNames[currentPhase]}
             </div>
           </div>
+          <p className="-mt-4 mb-4 text-center text-xs text-foreground/60">
+            {isOvertime ? 'Tempo extra' : isRunning ? 'Em foco' : pendingPhase ? 'Ciclo concluído' : session?.timer_status === 'paused' ? 'Pausado' : 'Pronto'}
+          </p>
 
           <div className="relative mb-5 flex items-center justify-center">
             <PolarRing
@@ -671,31 +951,24 @@ export function PomodoroTimer() {
             <NowPlaying compact />
           </div>
 
-          <div className="mb-7 w-full max-w-sm">
-            {currentPhase === 'immersion' && (
-              <TagSelector selectedTags={selectedTags} onTagsChange={setSelectedTags} />
-            )}
-            {currentPhase === 'dive' && (
-              <DiveTagSelector
-                selectedTags={diveTags}
-                onTagsChange={setDiveTags}
-                notes={diveNotes}
-                onNotesChange={setDiveNotes}
-              />
-            )}
-            {currentPhase === 'breath' && (
-              <div className="space-y-3">
-                <div className="text-center text-sm text-slate-200/75">Momento de descanso</div>
-                <BreathTagSelector selectedTags={breathTags} onTagsChange={setBreathTags} />
-              </div>
-            )}
-          </div>
+          {!isRunning && (
+            <div className="mb-7 w-full max-w-sm">
+              {currentPhase === 'immersion' && <TagSelector selectedTags={selectedTags} onTagsChange={setSelectedTags} />}
+              {currentPhase === 'dive' && <DiveTagSelector selectedTags={diveTags} onTagsChange={setDiveTags} notes={diveNotes} onNotesChange={setDiveNotes} />}
+              {currentPhase === 'breath' && (
+                <div className="space-y-3">
+                  <div className="text-center text-sm text-slate-200/75">Momento de descanso</div>
+                  <BreathTagSelector selectedTags={breathTags} onTagsChange={setBreathTags} />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col items-center gap-3">
             <ControlButtons
               isRunning={isRunning}
               onPlayPause={handlePlayPause}
-              onSkip={handleSkip}
+              onSkip={() => setShowSkipConfirmation(true)}
               onReset={handleReset}
             />
 
@@ -709,6 +982,15 @@ export function PomodoroTimer() {
               </button>
             )}
           </div>
+          {pendingPhase && !showPopup && transitionCountdown === null && (
+            <div className="glass mt-4 flex w-full max-w-sm items-center justify-between gap-3 rounded-2xl px-4 py-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Próxima fase</p>
+                <p className="font-medium text-foreground">{phaseNames[pendingPhase]} · {Math.round(getPhaseTime(pendingPhase) / 60)} min</p>
+              </div>
+              <button onClick={startPendingPhase} className="min-h-11 rounded-xl bg-primary px-4 font-medium text-primary-foreground">Começar</button>
+            </div>
+          )}
         </main>
 
         {/* Phase Popup */}
@@ -733,6 +1015,26 @@ export function PomodoroTimer() {
           onInclude={() => handleOverfocusDecision(true)}
           onDiscard={() => handleOverfocusDecision(false)}
         />
+
+        <Dialog open={showSkipConfirmation} onOpenChange={setShowSkipConfirmation}>
+          <DialogContent className="glass-popup max-w-sm border-white/10 text-center">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Pular {phaseNames[currentPhase]}?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">Esta fase será registrada como não concluída.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowSkipConfirmation(false)} className="glass-button min-h-11 flex-1 text-foreground">Continuar</button>
+              <button onClick={confirmSkip} className="min-h-11 flex-1 rounded-xl bg-destructive/20 text-destructive">Descartar fase</button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        {transitionCountdown !== null && (
+          <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/20 backdrop-blur-sm" role="status" aria-live="polite">
+            <p className="text-sm font-medium uppercase tracking-widest text-foreground/80">{pendingPhase ? phaseNames[pendingPhase] : 'Próxima fase'}</p>
+            <span className="text-6xl font-light text-foreground" aria-label={`Começa em ${transitionCountdown} segundos`}>{transitionCountdown}</span>
+            <button onClick={cancelAutoAdvance} className="glass-button min-h-11 px-5 text-sm text-foreground">Escolher depois</button>
+          </div>
+        )}
 
         {/* Missions Popup */}
         <MissionsPopup

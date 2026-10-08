@@ -4,8 +4,7 @@ import {
   saveSettings, 
   getCycles, 
   saveCycleRecord, 
-  updateCycleRating as updateStorageRating,
-  generateId 
+  updateCycleRating as updateStorageRating
 } from "@/lib/storage";
 
 export type Phase = 'immersion' | 'dive' | 'breath';
@@ -14,6 +13,7 @@ export interface PomodoroSettings {
   immersionMinutes: number;
   diveMinutes: number;
   breathMinutes: number;
+  autoAdvance: boolean;
 }
 
 export interface CycleRecord {
@@ -56,6 +56,7 @@ const defaultSettings: PomodoroSettings = {
   immersionMinutes: 25,
   diveMinutes: 25,
   breathMinutes: 5,
+  autoAdvance: false,
 };
 
 // Get current user ID
@@ -105,6 +106,7 @@ export async function getSettingsAsync(): Promise<PomodoroSettings> {
       immersionMinutes: data.immersion_minutes,
       diveMinutes: data.dive_minutes,
       breathMinutes: data.breath_minutes,
+      autoAdvance: data.auto_advance ?? false,
     };
   } catch (e) {
     return localSettings;
@@ -125,6 +127,7 @@ export async function saveSettingsAsync(settings: PomodoroSettings): Promise<voi
         immersion_minutes: settings.immersionMinutes,
         dive_minutes: settings.diveMinutes,
         breath_minutes: settings.breathMinutes,
+        auto_advance: settings.autoAdvance,
       })
       .eq('user_id', userId);
   } catch (e) {

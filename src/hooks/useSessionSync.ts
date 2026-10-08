@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { Phase, getSettingsAsync, PomodoroSettings } from '@/lib/database';
+import { TimerStatus } from '@/lib/timerEngine';
 
 export interface ActiveSession {
   id: string;
@@ -15,6 +16,40 @@ export interface ActiveSession {
   updated_at: string;
   extra_time_seconds: number;
   is_overtime: boolean;
+  end_at: string | null;
+  paused_at: string | null;
+  remaining_when_paused: number | null;
+  overtime_started_at: string | null;
+  timer_status: TimerStatus;
+}
+
+function normalizeSession(session: ActiveSession): ActiveSession {
+  const now = Date.now();
+  const status = session.timer_status || (
+    session.is_overtime ? 'overtime' : session.is_running ? 'running' :
+      session.started_at || session.time_left < session.total_time ? 'paused' : 'idle'
+  );
+  const startedAt = session.started_at ? new Date(session.started_at).getTime() : null;
+  const legacyEndAt = status === 'running' && startedAt !== null
+    ? new Date(session.updated_at).getTime() + session.time_left * 1000
+    : null;
+  const overtimeStartedAt = session.overtime_started_at || (
+    status === 'overtime'
+      ? new Date(new Date(session.updated_at).getTime() - (session.extra_time_seconds || 0) * 1000).toISOString()
+      : null
+  );
+
+  return {
+    ...session,
+    end_at: session.end_at || (legacyEndAt === null ? null : new Date(legacyEndAt).toISOString()),
+    paused_at: session.paused_at || null,
+    remaining_when_paused: session.remaining_when_paused ?? session.time_left,
+    overtime_started_at: overtimeStartedAt,
+    timer_status: status,
+    extra_time_seconds: status === 'overtime' && overtimeStartedAt
+      ? Math.max(0, Math.floor((now - new Date(overtimeStartedAt).getTime()) / 1000))
+      : session.extra_time_seconds || 0,
+  };
 }
 
 export function useSessionSync() {
@@ -44,6 +79,11 @@ export function useSessionSync() {
       updated_at: new Date().toISOString(),
       extra_time_seconds: 0,
       is_overtime: false,
+      end_at: null,
+      paused_at: null,
+      remaining_when_paused: defaultTimeSeconds,
+      overtime_started_at: null,
+      timer_status: 'idle',
     };
   }, [settings, user]);
 
@@ -51,18 +91,7 @@ export function useSessionSync() {
     const saved = localStorage.getItem('ocean_flow_active_session');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved) as ActiveSession;
-        if (parsed.is_running && parsed.started_at) {
-          const now = Date.now();
-          const lastUpdate = new Date(parsed.updated_at).getTime();
-          const elapsedSeconds = Math.floor((now - lastUpdate) / 1000);
-          if (parsed.is_overtime) {
-            parsed.extra_time_seconds = (parsed.extra_time_seconds || 0) + elapsedSeconds;
-          } else {
-            parsed.time_left = Math.max(0, parsed.time_left - elapsedSeconds);
-          }
-        }
-        return parsed;
+        return normalizeSession(JSON.parse(saved) as ActiveSession);
       } catch {
         // ignore parse error
       }
@@ -96,23 +125,7 @@ export function useSessionSync() {
         if (error) throw error;
 
         if (data) {
-          // Calculate adjusted time based on server state
-          const serverSession = data as unknown as ActiveSession;
-          
-          // If timer was running, calculate elapsed time since last update
-          if (serverSession.is_running && serverSession.started_at) {
-            const now = Date.now();
-            const lastUpdate = new Date(serverSession.updated_at).getTime();
-            const elapsedSeconds = Math.floor((now - lastUpdate) / 1000);
-            
-            if (serverSession.is_overtime) {
-              serverSession.extra_time_seconds = (serverSession.extra_time_seconds || 0) + elapsedSeconds;
-            } else {
-              serverSession.time_left = Math.max(0, serverSession.time_left - elapsedSeconds);
-            }
-          }
-          
-          setSession(serverSession);
+          setSession(normalizeSession(data as unknown as ActiveSession));
         } else {
           // Create new session
           const defaultTimeSeconds = (settings?.immersionMinutes || 25) * 60;
@@ -127,12 +140,14 @@ export function useSessionSync() {
               cycle_count: 0,
               extra_time_seconds: 0,
               is_overtime: false,
+              timer_status: 'idle',
+              remaining_when_paused: defaultTimeSeconds,
             })
             .select()
             .single();
 
           if (createError) throw createError;
-          setSession(created as unknown as ActiveSession);
+          setSession(normalizeSession(created as unknown as ActiveSession));
         }
       } catch (e) {
         console.error('Error fetching session, falling back to local:', e);
@@ -157,7 +172,7 @@ export function useSessionSync() {
         },
         (payload) => {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            const newData = payload.new as unknown as ActiveSession;
+            const newData = normalizeSession(payload.new as unknown as ActiveSession);
             // Only update if this is from another device (compare timestamps)
             const updateTime = new Date(newData.updated_at).getTime();
             if (updateTime > lastUpdateRef.current + 500) { // 500ms buffer
@@ -225,6 +240,11 @@ export function useSessionSync() {
       started_at: null,
       extra_time_seconds: 0,
       is_overtime: false,
+          end_at: null,
+          paused_at: null,
+          remaining_when_paused: defaultTimeSeconds,
+          overtime_started_at: null,
+          timer_status: 'idle',
     });
   }, [user, settings, updateSession]);
 

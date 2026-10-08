@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 interface PolarRingProps {
-  progress: number; // 0 to 1
+  progress: number;
   size?: number;
   strokeWidth?: number;
   color?: string;
@@ -15,64 +15,53 @@ export function PolarRing({
   color = "hsl(var(--primary))",
   className 
 }: PolarRingProps) {
-  const radius = (size - strokeWidth - 20) / 2; // Extra padding for glow
+  const radius = (size - strokeWidth - 20) / 2;
   const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (progress * circumference);
+  const normalizedProgress = Math.min(1, Math.max(0, progress));
+  const offset = circumference - (normalizedProgress * circumference);
   const center = size / 2;
 
   return (
     <svg
       width={size}
       height={size}
-      className={cn("polar-ring transform -rotate-90", className)}
+      className={cn("polar-ring -rotate-90", className)}
       style={{ overflow: 'visible' }}
+      aria-hidden="true"
     >
-      {/* Glow filter definition - using circular primitives for smooth glow */}
       <defs>
-        <filter id="glow" filterUnits="userSpaceOnUse" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="coloredBlur" />
+        <filter id={`softGlow-${size}`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="8" result="blur" />
           <feMerge>
-            <feMergeNode in="coloredBlur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <filter id="softGlow" filterUnits="userSpaceOnUse" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur" />
-          <feColorMatrix in="blur" type="saturate" values="1.5" result="saturatedBlur" />
-          <feMerge>
-            <feMergeNode in="saturatedBlur" />
+            <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
       </defs>
 
-      {/* Background ring */}
       <circle
         cx={center}
         cy={center}
         r={radius}
         fill="none"
-        stroke="currentColor"
+        stroke="rgba(255,255,255,0.10)"
         strokeWidth={strokeWidth}
-        className="text-white/10"
       />
-      
-      {/* Outer glow circle (blurred) */}
+
       <circle
         cx={center}
         cy={center}
         r={radius}
         fill="none"
         stroke={color}
-        strokeWidth={strokeWidth + 8}
+        strokeWidth={strokeWidth + 10}
         strokeLinecap="round"
         strokeDasharray={circumference}
         strokeDashoffset={offset}
-        className="opacity-20 transition-all duration-300"
-        filter="url(#softGlow)"
+        opacity={0.18}
+        filter={`url(#softGlow-${size})`}
       />
-      
-      {/* Progress ring with glow */}
+
       <circle
         cx={center}
         cy={center}
@@ -84,7 +73,7 @@ export function PolarRing({
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         className="transition-all duration-300 ease-out"
-        filter="url(#glow)"
+        filter={`url(#softGlow-${size})`}
       />
     </svg>
   );
