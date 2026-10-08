@@ -248,6 +248,18 @@ export function PomodoroTimer() {
     navigate('/auth');
   };
 
+  const handleReset = useCallback(() => {
+    const phaseDuration = getPhaseTime(currentPhase);
+    updateSession({
+      time_left: phaseDuration,
+      total_time: phaseDuration,
+      started_at: null,
+      is_running: false,
+      is_overtime: false,
+      extra_time_seconds: 0,
+    });
+  }, [currentPhase, getPhaseTime, updateSession]);
+
   const handleTimeChange = useCallback((newTimeSeconds: number) => {
     updateSession({
       time_left: newTimeSeconds,
@@ -570,143 +582,134 @@ export function PomodoroTimer() {
 
   // Portrait layout (original)
   return (
-    <div 
-      className="min-h-screen transition-all duration-1000 ease-in-out"
+    <div
+      className="focus-shell transition-all duration-1000 ease-in-out"
       style={getBackgroundStyle()}
     >
-      <div className="relative min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 z-10">
-        {/* Top bar buttons */}
-        <div className="absolute top-6 right-6 flex gap-3">
-          <button
-            onClick={() => setShowPip(true)}
-            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
-            aria-label="Picture in Picture"
-          >
-            <Minimize2 className="w-5 h-5 text-foreground" />
-          </button>
-          <Link
-            to="/summary"
-            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
-            aria-label="Resumo do Dia"
-          >
-            <Calendar className="w-5 h-5 text-foreground" />
-          </Link>
-          <Link
-            to="/dashboard"
-            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
-            aria-label="Dashboard"
-          >
-            <BarChart3 className="w-5 h-5 text-foreground" />
-          </Link>
-          <Link
-            to="/settings"
-            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
-            aria-label="Configurações"
-          >
-            <Settings className="w-5 h-5 text-foreground" />
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="w-12 h-12 rounded-full glass-button flex items-center justify-center"
-            aria-label="Sair"
-          >
-            <LogOut className="w-5 h-5 text-foreground" />
-          </button>
-        </div>
-
-        {/* Left side - Cycle counter and Missions widget */}
-        <div className="absolute top-6 left-6 flex flex-col gap-3">
-          <div className="glass px-4 py-2 rounded-full">
-            <span className="text-sm text-muted-foreground">Ciclo </span>
-            <span className="text-foreground font-semibold">{cycleCount}</span>
+      <div className="relative z-10 flex min-h-[100dvh] w-full flex-col px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-[max(env(safe-area-inset-top),0.75rem)] sm:px-6">
+        <header className="mb-2 flex w-full items-center justify-between gap-3">
+          <div className="glass flex items-center gap-2 rounded-full border border-white/10 px-3 py-2">
+            <span className="text-[10px] font-medium uppercase tracking-[0.24em] text-sky-100/80">
+              Ocean Flow
+            </span>
           </div>
-          <MissionsWidget onClick={() => setShowMissionsPopup(true)} />
-        </div>
 
-        {/* Now Playing - Above timer */}
-        <div className="mb-4">
-          <NowPlaying />
-        </div>
+          <nav className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/20 p-1.5 backdrop-blur-xl">
+            <Link
+              to="/summary"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/5 hover:text-white"
+              aria-label="Resumo do Dia"
+              title="Resumo do Dia"
+            >
+              <Calendar className="h-4 w-4" />
+            </Link>
+            <Link
+              to="/dashboard"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/5 hover:text-white"
+              aria-label="Dashboard"
+              title="Dashboard"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </Link>
+            <Link
+              to="/settings"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/5 hover:text-white"
+              aria-label="Configurações"
+              title="Configurações"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+            <button
+              onClick={() => setShowPip(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/5 hover:text-white"
+              aria-label="Picture in Picture"
+              title="Picture in Picture"
+            >
+              <Minimize2 className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/5 hover:text-white"
+              aria-label="Sair"
+              title="Sair"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </nav>
+        </header>
 
-        {/* Phase indicator */}
-        <div className="mb-4 animate-slide-up">
-          <span className={cn(
-            "text-lg font-medium tracking-wide uppercase",
-            isOvertime ? 'text-yellow-400' : (currentPhase === 'breath' ? 'text-foreground/90' : 'text-foreground/80')
-          )}>
-            {isOvertime ? '🔥 Overfocus' : phaseNames[currentPhase]}
-          </span>
-        </div>
-
-        {/* Timer with Polar Ring */}
-        <div className="relative flex items-center justify-center mb-8">
-          <PolarRing 
-            progress={progress} 
-            size={300}
-            strokeWidth={8}
-            color={isOvertime ? 'hsl(45, 100%, 55%)' : getRingColor()}
-          />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <TimerDisplay 
-              minutes={displayMinutes} 
-              seconds={displaySeconds}
-              phase={currentPhase}
-              onTimeChange={!isRunning && !isOvertime ? handleTimeChange : undefined}
-              editable={!isRunning && !isOvertime}
-              dynamicColor={isOvertime ? undefined : getTimerColor()}
-            />
+        <main className="flex flex-1 flex-col items-center justify-center pb-4 pt-2">
+          <div className="mb-6 flex w-full max-w-xs items-center justify-between gap-3">
+            <div className="glass rounded-full px-3 py-2 text-xs text-slate-200/80">
+              ciclo <span className="ml-1 font-semibold text-white">{cycleCount}</span>
+            </div>
+            <div className="glass rounded-full px-3 py-2 text-[10px] font-medium uppercase tracking-[0.22em] text-sky-100/70">
+              {isOvertime ? 'Overfocus' : phaseNames[currentPhase]}
+            </div>
           </div>
-        </div>
 
-        {/* Phase-specific inputs */}
-        <div className="w-full max-w-sm mb-8 animate-slide-up">
-          {currentPhase === 'immersion' && (
-            <TagSelector
-              selectedTags={selectedTags}
-              onTagsChange={setSelectedTags}
+          <div className="relative mb-5 flex items-center justify-center">
+            <PolarRing
+              progress={progress}
+              size={typeof window !== 'undefined' ? Math.min(window.innerWidth * 0.7, 320) : 280}
+              strokeWidth={8}
+              color={isOvertime ? 'hsl(45, 100%, 55%)' : getRingColor()}
             />
-          )}
-          {currentPhase === 'dive' && (
-            <DiveTagSelector
-              selectedTags={diveTags}
-              onTagsChange={setDiveTags}
-              notes={diveNotes}
-              onNotesChange={setDiveNotes}
-            />
-          )}
-          {currentPhase === 'breath' && (
-            <div className="space-y-4">
-              <div className="text-center">
-                <span className="text-3xl">🌊</span>
-                <p className="mt-2 text-foreground/80 font-medium">Momento de descanso</p>
-              </div>
-              <BreathTagSelector
-                selectedTags={breathTags}
-                onTagsChange={setBreathTags}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <TimerDisplay
+                minutes={displayMinutes}
+                seconds={displaySeconds}
+                phase={currentPhase}
+                onTimeChange={!isRunning && !isOvertime ? handleTimeChange : undefined}
+                editable={!isRunning && !isOvertime}
+                dynamicColor={isOvertime ? undefined : getTimerColor()}
               />
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Controls */}
-        <div className="flex flex-col items-center gap-4">
-          <ControlButtons
-            isRunning={isRunning}
-            onPlayPause={handlePlayPause}
-            onSkip={handleSkip}
-          />
-          
-          {/* Complete Cycle Button */}
-          {isRunning && !isOvertime && (
-            <button
-              onClick={handleCompleteCycle}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl glass-button text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
-            >
-              <CheckCircle className="w-4 h-4" />
-              Concluir fase
-            </button>
-          )}
-        </div>
+          <div className="mb-5 w-full max-w-sm">
+            <NowPlaying compact />
+          </div>
+
+          <div className="mb-7 w-full max-w-sm">
+            {currentPhase === 'immersion' && (
+              <TagSelector selectedTags={selectedTags} onTagsChange={setSelectedTags} />
+            )}
+            {currentPhase === 'dive' && (
+              <DiveTagSelector
+                selectedTags={diveTags}
+                onTagsChange={setDiveTags}
+                notes={diveNotes}
+                onNotesChange={setDiveNotes}
+              />
+            )}
+            {currentPhase === 'breath' && (
+              <div className="space-y-3">
+                <div className="text-center text-sm text-slate-200/75">Momento de descanso</div>
+                <BreathTagSelector selectedTags={breathTags} onTagsChange={setBreathTags} />
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col items-center gap-3">
+            <ControlButtons
+              isRunning={isRunning}
+              onPlayPause={handlePlayPause}
+              onSkip={handleSkip}
+              onReset={handleReset}
+            />
+
+            {isRunning && !isOvertime && (
+              <button
+                onClick={handleCompleteCycle}
+                className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/20 px-4 py-2 text-xs font-medium text-slate-200/80 backdrop-blur-xl transition hover:text-white"
+              >
+                <CheckCircle className="h-4 w-4" />
+                Concluir fase
+              </button>
+            )}
+          </div>
+        </main>
 
         {/* Phase Popup */}
         <PhasePopup
