@@ -1,0 +1,7 @@
+{
+  "name": "Pomodoro Oceânico",
+  "description": "App Pomodoro com tema oceânico. Ciclos de Imersão, Mergulho e Respiração para maximizar seu foco e produtividade.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

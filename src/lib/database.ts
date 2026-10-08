@@ -1,4 +1,12 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import { 
+  getSettings, 
+  saveSettings, 
+  getCycles, 
+  saveCycleRecord, 
+  updateCycleRating as updateStorageRating,
+  generateId 
+} from "@/lib/storage";
 
 export type Phase = 'immersion' | 'dive' | 'breath';
 
@@ -52,15 +60,36 @@ const defaultSettings: PomodoroSettings = {
 
 // Get current user ID
 async function getCurrentUserId(): Promise<string | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id || null;
+  if (!isSupabaseConfigured) {
+    const local = localStorage.getItem('ocean_flow_local_user');
+    if (local) {
+      try {
+        const u = JSON.parse(local);
+        return u.id || 'guest-user';
+      } catch {
+        return 'guest-user';
+      }
+    }
+    return 'guest-user';
+  }
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.id || null;
+  } catch {
+    return 'guest-user';
+  }
 }
 
 // Settings functions
 export async function getSettingsAsync(): Promise<PomodoroSettings> {
+  const localSettings = getSettings();
+  if (!isSupabaseConfigured) {
+    return localSettings;
+  }
+
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return defaultSettings;
+    if (!userId || userId.startsWith('local-')) return localSettings;
 
     const { data, error } = await supabase
       .from('pomodoro_settings')
@@ -68,32 +97,29 @@ export async function getSettingsAsync(): Promise<PomodoroSettings> {
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (error) {
-      console.error('Error fetching settings:', error);
-      return defaultSettings;
+    if (error || !data) {
+      return localSettings;
     }
 
-    if (data) {
-      return {
-        immersionMinutes: data.immersion_minutes,
-        diveMinutes: data.dive_minutes,
-        breathMinutes: data.breath_minutes,
-      };
-    }
-
-    return defaultSettings;
+    return {
+      immersionMinutes: data.immersion_minutes,
+      diveMinutes: data.dive_minutes,
+      breathMinutes: data.breath_minutes,
+    };
   } catch (e) {
-    console.error('Error reading settings:', e);
-    return defaultSettings;
+    return localSettings;
   }
 }
 
 export async function saveSettingsAsync(settings: PomodoroSettings): Promise<void> {
+  saveSettings(settings);
+  if (!isSupabaseConfigured) return;
+
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return;
+    if (!userId || userId.startsWith('local-')) return;
 
-    const { error } = await supabase
+    await supabase
       .from('pomodoro_settings')
       .update({
         immersion_minutes: settings.immersionMinutes,
@@ -101,24 +127,32 @@ export async function saveSettingsAsync(settings: PomodoroSettings): Promise<voi
         breath_minutes: settings.breathMinutes,
       })
       .eq('user_id', userId);
-
-    if (error) {
-      console.error('Error saving settings:', error);
-    }
   } catch (e) {
-    console.error('Error saving settings:', e);
+    console.error('Error saving settings to remote:', e);
   }
 }
 
 // Cycle record functions
 export async function saveCycleRecordAsync(record: Omit<CycleRecord, 'id'>): Promise<string | null> {
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId) return null;
+  const id = generateId();
+  const userId = (await getCurrentUserId()) || 'guest-user';
+  
+  const fullRecord: CycleRecord = {
+    ...record,
+    id,
+    userId,
+  };
+  saveCycleRecord(fullRecord);
 
+  if (!isSupabaseConfigured || userId.startsWith('local-')) {
+    return id;
+  }
+
+  try {
     const { data, error } = await supabase
       .from('cycle_records')
       .insert({
+        id,
         user_id: userId,
         phase: record.phase,
         start_time: record.startTime,
@@ -134,41 +168,54 @@ export async function saveCycleRecordAsync(record: Omit<CycleRecord, 'id'>): Pro
       .single();
 
     if (error) {
-      console.error('Error saving cycle:', error);
-      return null;
+      console.error('Error saving cycle to remote:', error);
+      return id;
     }
 
-    return data?.id || null;
+    return data?.id || id;
   } catch (e) {
-    console.error('Error saving cycle:', e);
-    return null;
+    console.error('Error saving cycle to remote:', e);
+    return id;
   }
 }
 
 // Update cycle rating
 export async function updateCycleRatingAsync(cycleId: string, rating: number): Promise<boolean> {
+  updateStorageRating(cycleId, rating);
+  if (!isSupabaseConfigured) return true;
+
   try {
-    const { error } = await supabase
+    await supabase
       .from('cycle_records')
       .update({ rating })
       .eq('id', cycleId);
 
-    if (error) {
-      console.error('Error updating cycle rating:', error);
-      return false;
-    }
-
     return true;
   } catch (e) {
-    console.error('Error updating cycle rating:', e);
-    return false;
+    console.error('Error updating cycle rating in remote:', e);
+    return true;
   }
 }
 
 export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<CycleRecord[]> {
+  const getFilteredLocalCycles = (): CycleRecord[] => {
+    let cycles = getCycles();
+    if (startDate) {
+      cycles = cycles.filter(c => new Date(c.startTime).getTime() >= startDate.getTime());
+    }
+    if (endDate) {
+      cycles = cycles.filter(c => new Date(c.startTime).getTime() <= endDate.getTime());
+    }
+    return cycles;
+  };
+
+  if (!isSupabaseConfigured) {
+    return getFilteredLocalCycles();
+  }
+
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return [];
+    if (!userId || userId.startsWith('local-')) return getFilteredLocalCycles();
 
     let query = supabase
       .from('cycle_records')
@@ -185,12 +232,11 @@ export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<
 
     const { data, error } = await query;
 
-    if (error) {
-      console.error('Error fetching cycles:', error);
-      return [];
+    if (error || !data || data.length === 0) {
+      return getFilteredLocalCycles();
     }
 
-    return (data || []).map(row => ({
+    return data.map(row => ({
       id: row.id,
       phase: row.phase as Phase,
       startTime: row.start_time,
@@ -205,8 +251,7 @@ export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<
       spotifyAlbum: row.spotify_album || undefined,
     }));
   } catch (e) {
-    console.error('Error reading cycles:', e);
-    return [];
+    return getFilteredLocalCycles();
   }
 }
 
@@ -322,9 +367,18 @@ export async function getRecentCyclesAsync(limit: number = 20, startDate?: Date,
 
 // Get total completed cycles - counts breath phases (full cycle completion)
 export async function getTotalCompletedCyclesAsync(startDate?: Date, endDate?: Date): Promise<number> {
+  const getLocalCount = async () => {
+    const cycles = await getCyclesAsync(startDate, endDate);
+    return cycles.filter(c => c.phase === 'breath' && c.completed).length;
+  };
+
+  if (!isSupabaseConfigured) {
+    return getLocalCount();
+  }
+
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return 0;
+    if (!userId || userId.startsWith('local-')) return getLocalCount();
 
     let query = supabase
       .from('cycle_records')
@@ -342,15 +396,13 @@ export async function getTotalCompletedCyclesAsync(startDate?: Date, endDate?: D
 
     const { count, error } = await query;
 
-    if (error) {
-      console.error('Error counting cycles:', error);
-      return 0;
+    if (error || count === null || count === 0) {
+      return getLocalCount();
     }
 
-    return count || 0;
+    return count;
   } catch (e) {
-    console.error('Error counting cycles:', e);
-    return 0;
+    return getLocalCount();
   }
 }
 
@@ -424,9 +476,26 @@ export function generateId(): string {
 
 // Get rating statistics
 export async function getRatingStatsAsync(startDate?: Date, endDate?: Date): Promise<RatingStats> {
+  const getLocalRatingStats = async () => {
+    const cycles = await getCyclesAsync(startDate, endDate);
+    const ratings = cycles.filter(c => c.phase === 'breath' && c.completed && c.rating != null).map(c => c.rating as number);
+    const totalRated = ratings.length;
+    if (totalRated === 0) return { averageRating: 0, totalRated: 0, distribution: [] };
+    const averageRating = ratings.reduce((a, b) => a + b, 0) / totalRated;
+    const distribution = [1, 2, 3, 4, 5].map(rating => ({
+      rating,
+      count: ratings.filter(r => r === rating).length,
+    }));
+    return { averageRating, totalRated, distribution };
+  };
+
+  if (!isSupabaseConfigured) {
+    return getLocalRatingStats();
+  }
+
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return { averageRating: 0, totalRated: 0, distribution: [] };
+    if (!userId || userId.startsWith('local-')) return getLocalRatingStats();
 
     let query = supabase
       .from('cycle_records')
@@ -445,21 +514,19 @@ export async function getRatingStatsAsync(startDate?: Date, endDate?: Date): Pro
 
     const { data, error } = await query;
 
-    if (error) {
-      console.error('Error fetching rating stats:', error);
-      return { averageRating: 0, totalRated: 0, distribution: [] };
+    if (error || !data || data.length === 0) {
+      return getLocalRatingStats();
     }
 
-    const ratings = (data || []).map(d => d.rating as number);
+    const ratings = data.map(d => d.rating as number);
     const totalRated = ratings.length;
     
     if (totalRated === 0) {
-      return { averageRating: 0, totalRated: 0, distribution: [] };
+      return getLocalRatingStats();
     }
 
     const averageRating = ratings.reduce((a, b) => a + b, 0) / totalRated;
     
-    // Calculate distribution
     const distribution = [1, 2, 3, 4, 5].map(rating => ({
       rating,
       count: ratings.filter(r => r === rating).length,
@@ -467,16 +534,46 @@ export async function getRatingStatsAsync(startDate?: Date, endDate?: Date): Pro
 
     return { averageRating, totalRated, distribution };
   } catch (e) {
-    console.error('Error getting rating stats:', e);
-    return { averageRating: 0, totalRated: 0, distribution: [] };
+    return getLocalRatingStats();
   }
 }
 
 // Get daily rating averages
 export async function getDailyRatingStatsAsync(startDate: Date, endDate: Date): Promise<{ date: string; avgRating: number; count: number }[]> {
+  const getLocalDailyRatings = async () => {
+    const cycles = await getCyclesAsync(startDate, endDate);
+    const breathCycles = cycles.filter(c => c.phase === 'breath' && c.completed && c.rating != null);
+    const dailyMap = new Map<string, { sum: number; count: number }>();
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      dailyMap.set(dateStr, { sum: 0, count: 0 });
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    for (const c of breathCycles) {
+      const dateStr = new Date(c.startTime).toISOString().split('T')[0];
+      const existing = dailyMap.get(dateStr) || { sum: 0, count: 0 };
+      dailyMap.set(dateStr, {
+        sum: existing.sum + (c.rating as number),
+        count: existing.count + 1
+      });
+    }
+    return Array.from(dailyMap.entries())
+      .map(([date, stats]) => ({
+        date,
+        avgRating: stats.count > 0 ? stats.sum / stats.count : 0,
+        count: stats.count
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  if (!isSupabaseConfigured) {
+    return getLocalDailyRatings();
+  }
+
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return [];
+    if (!userId || userId.startsWith('local-')) return getLocalDailyRatings();
 
     const { data, error } = await supabase
       .from('cycle_records')
@@ -488,9 +585,8 @@ export async function getDailyRatingStatsAsync(startDate: Date, endDate: Date): 
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString());
 
-    if (error) {
-      console.error('Error fetching daily ratings:', error);
-      return [];
+    if (error || !data || data.length === 0) {
+      return getLocalDailyRatings();
     }
 
     const dailyMap = new Map<string, { sum: number; count: number }>();
@@ -520,16 +616,60 @@ export async function getDailyRatingStatsAsync(startDate: Date, endDate: Date): 
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
   } catch (e) {
-    console.error('Error getting daily rating stats:', e);
-    return [];
+    return getLocalDailyRatings();
   }
 }
 
 // Get music × focus correlation stats
 export async function getMusicFocusStatsAsync(startDate?: Date, endDate?: Date): Promise<MusicFocusStats[]> {
+  const getLocalMusicStats = async () => {
+    const cycles = await getCyclesAsync(startDate, endDate);
+    const diveCycles = cycles.filter(c => c.phase === 'dive' && c.completed);
+    const artistMap = new Map<string, { 
+      cycleCount: number; 
+      ratingSum: number; 
+      ratingCount: number; 
+      totalMinutes: number;
+    }>();
+
+    for (const c of diveCycles) {
+      const artist = c.spotifyArtist || 'Sem música';
+      if (!artistMap.has(artist)) {
+        artistMap.set(artist, { 
+          cycleCount: 0, 
+          ratingSum: 0, 
+          ratingCount: 0, 
+          totalMinutes: 0,
+        });
+      }
+      const stats = artistMap.get(artist)!;
+      stats.cycleCount += 1;
+      if (c.rating) {
+        stats.ratingSum += c.rating;
+        stats.ratingCount += 1;
+      }
+      const startTime = new Date(c.startTime).getTime();
+      const endTime = new Date(c.endTime).getTime();
+      stats.totalMinutes += Math.round((endTime - startTime) / 60000);
+    }
+
+    return Array.from(artistMap.entries())
+      .map(([artist, stats]) => ({
+        artist,
+        cycleCount: stats.cycleCount,
+        averageRating: stats.ratingCount > 0 ? stats.ratingSum / stats.ratingCount : 0,
+        totalMinutes: stats.totalMinutes,
+      }))
+      .sort((a, b) => b.totalMinutes - a.totalMinutes);
+  };
+
+  if (!isSupabaseConfigured) {
+    return getLocalMusicStats();
+  }
+
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return [];
+    if (!userId || userId.startsWith('local-')) return getLocalMusicStats();
 
     let query = supabase
       .from('cycle_records')
@@ -547,9 +687,8 @@ export async function getMusicFocusStatsAsync(startDate?: Date, endDate?: Date):
 
     const { data, error } = await query;
 
-    if (error) {
-      console.error('Error fetching music stats:', error);
-      return [];
+    if (error || !data || data.length === 0) {
+      return getLocalMusicStats();
     }
 
     const artistMap = new Map<string, { 
@@ -560,7 +699,7 @@ export async function getMusicFocusStatsAsync(startDate?: Date, endDate?: Date):
       tracks: Set<string>;
     }>();
 
-    for (const row of data || []) {
+    for (const row of data) {
       const artist = row.spotify_artist || 'Sem música';
       const trackName = row.spotify_track_name || undefined;
       
@@ -600,16 +739,52 @@ export async function getMusicFocusStatsAsync(startDate?: Date, endDate?: Date):
       }))
       .sort((a, b) => b.totalMinutes - a.totalMinutes);
   } catch (e) {
-    console.error('Error getting music focus stats:', e);
-    return [];
+    return getLocalMusicStats();
   }
 }
 
 // Get top tracks by rating
 export async function getTopTracksByRatingAsync(startDate?: Date, endDate?: Date): Promise<{ track: string; artist: string; avgRating: number; cycleCount: number }[]> {
+  const getLocalTopTracks = async () => {
+    const cycles = await getCyclesAsync(startDate, endDate);
+    const ratedTracks = cycles.filter(c => c.phase === 'breath' && c.completed && c.rating != null && c.spotifyTrackName != null);
+    const trackMap = new Map<string, { artist: string; ratingSum: number; count: number }>();
+
+    for (const c of ratedTracks) {
+      const key = `${c.spotifyTrackName}|${c.spotifyArtist || 'Desconhecido'}`;
+      if (!trackMap.has(key)) {
+        trackMap.set(key, { 
+          artist: c.spotifyArtist || 'Desconhecido', 
+          ratingSum: 0, 
+          count: 0 
+        });
+      }
+      const stats = trackMap.get(key)!;
+      stats.ratingSum += c.rating as number;
+      stats.count += 1;
+    }
+
+    return Array.from(trackMap.entries())
+      .map(([key, stats]) => {
+        const [track] = key.split('|');
+        return {
+          track,
+          artist: stats.artist,
+          avgRating: stats.ratingSum / stats.count,
+          cycleCount: stats.count,
+        };
+      })
+      .sort((a, b) => b.avgRating - a.avgRating)
+      .slice(0, 10);
+  };
+
+  if (!isSupabaseConfigured) {
+    return getLocalTopTracks();
+  }
+
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return [];
+    if (!userId || userId.startsWith('local-')) return getLocalTopTracks();
 
     let query = supabase
       .from('cycle_records')
@@ -629,14 +804,13 @@ export async function getTopTracksByRatingAsync(startDate?: Date, endDate?: Date
 
     const { data, error } = await query;
 
-    if (error) {
-      console.error('Error fetching top tracks:', error);
-      return [];
+    if (error || !data || data.length === 0) {
+      return getLocalTopTracks();
     }
 
     const trackMap = new Map<string, { artist: string; ratingSum: number; count: number }>();
 
-    for (const row of data || []) {
+    for (const row of data) {
       const key = `${row.spotify_track_name}|${row.spotify_artist}`;
       
       if (!trackMap.has(key)) {
@@ -662,12 +836,10 @@ export async function getTopTracksByRatingAsync(startDate?: Date, endDate?: Date
           cycleCount: stats.count,
         };
       })
-      .filter(t => t.cycleCount >= 2) // Only show tracks with at least 2 cycles
       .sort((a, b) => b.avgRating - a.avgRating)
       .slice(0, 10);
   } catch (e) {
-    console.error('Error getting top tracks by rating:', e);
-    return [];
+    return getLocalTopTracks();
   }
 }
 

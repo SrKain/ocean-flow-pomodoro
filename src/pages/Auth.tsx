@@ -22,7 +22,7 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
-  const { signIn, signUp, resetPassword, user, loading } = useAuth();
+  const { signIn, signUp, resetPassword, user, loading, signInAsGuest } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -226,6 +226,18 @@ export default function Auth() {
                 mode === 'signup' ? 'Criar conta' :
                 'Enviar email'
               )}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                signInAsGuest();
+                navigate('/');
+              }}
+              className="w-full ios-button-secondary"
+            >
+              Continuar como Convidado
             </Button>
           </form>
 

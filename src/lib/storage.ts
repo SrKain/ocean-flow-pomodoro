@@ -14,6 +14,11 @@ export interface CycleRecord {
   tag?: string;
   actions?: string;
   completed: boolean;
+  userId?: string;
+  rating?: number;
+  spotifyTrackName?: string;
+  spotifyArtist?: string;
+  spotifyAlbum?: string;
 }
 
 export interface PomodoroState {
@@ -152,4 +157,17 @@ export function getRecentCycles(limit: number = 20): CycleRecord[] {
 
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+export function updateCycleRating(cycleId: string, rating: number): void {
+  try {
+    const state = getState();
+    const cycle = state.cycles.find(c => c.id === cycleId);
+    if (cycle) {
+      cycle.rating = rating;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+  } catch (e) {
+    console.error('Error updating cycle rating in storage:', e);
+  }
 }

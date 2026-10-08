@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { Phase, getSettingsAsync, PomodoroSettings } from '@/lib/database';
 
@@ -30,10 +30,57 @@ export function useSessionSync() {
     getSettingsAsync().then(setSettings);
   }, []);
 
+  const createDefaultSession = useCallback((): ActiveSession => {
+    const defaultTimeSeconds = (settings?.immersionMinutes || 25) * 60;
+    return {
+      id: 'local-session',
+      user_id: user?.id || 'guest',
+      current_phase: 'immersion',
+      time_left: defaultTimeSeconds,
+      total_time: defaultTimeSeconds,
+      is_running: false,
+      cycle_count: 0,
+      started_at: null,
+      updated_at: new Date().toISOString(),
+      extra_time_seconds: 0,
+      is_overtime: false,
+    };
+  }, [settings, user]);
+
+  const loadLocalSession = useCallback((): ActiveSession => {
+    const saved = localStorage.getItem('ocean_flow_active_session');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as ActiveSession;
+        if (parsed.is_running && parsed.started_at) {
+          const now = Date.now();
+          const lastUpdate = new Date(parsed.updated_at).getTime();
+          const elapsedSeconds = Math.floor((now - lastUpdate) / 1000);
+          if (parsed.is_overtime) {
+            parsed.extra_time_seconds = (parsed.extra_time_seconds || 0) + elapsedSeconds;
+          } else {
+            parsed.time_left = Math.max(0, parsed.time_left - elapsedSeconds);
+          }
+        }
+        return parsed;
+      } catch {
+        // ignore parse error
+      }
+    }
+    return createDefaultSession();
+  }, [createDefaultSession]);
+
   // Fetch or create session
   useEffect(() => {
     if (!user) {
       setSession(null);
+      setLoading(false);
+      return;
+    }
+
+    if (!isSupabaseConfigured || user.id.startsWith('local-')) {
+      const local = loadLocalSession();
+      setSession(local);
       setLoading(false);
       return;
     }
@@ -88,7 +135,8 @@ export function useSessionSync() {
           setSession(created as unknown as ActiveSession);
         }
       } catch (e) {
-        console.error('Error fetching session:', e);
+        console.error('Error fetching session, falling back to local:', e);
+        setSession(loadLocalSession());
       } finally {
         setLoading(false);
       }
@@ -125,15 +173,21 @@ export function useSessionSync() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, settings]);
+  }, [user, settings, isSupabaseConfigured, loadLocalSession]);
 
   // Debounced update to server
   const updateSession = useCallback(async (updates: Partial<ActiveSession>) => {
     if (!user || !session) return;
 
     // Update local state immediately
-    setSession(prev => prev ? { ...prev, ...updates, updated_at: new Date().toISOString() } : null);
+    const updatedSession = { ...session, ...updates, updated_at: new Date().toISOString() };
+    setSession(updatedSession);
+    localStorage.setItem('ocean_flow_active_session', JSON.stringify(updatedSession));
     lastUpdateRef.current = Date.now();
+
+    if (!isSupabaseConfigured || user.id.startsWith('local-')) {
+      return;
+    }
 
     // Debounce server updates
     if (updateTimeoutRef.current) {

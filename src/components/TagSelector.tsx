@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
 export interface Tag {
@@ -43,6 +43,10 @@ export function TagSelector({ selectedTags, onTagsChange, className, compact = f
     if (!user) return;
     
     try {
+      if (!isSupabaseConfigured || user.id.startsWith('local-')) {
+        throw new Error('Local mode');
+      }
+
       const { data, error } = await supabase
         .from('tags')
         .select('*')
@@ -52,13 +56,33 @@ export function TagSelector({ selectedTags, onTagsChange, className, compact = f
 
       if (error) throw error;
       
-      setTags(data?.map(t => ({
-        id: t.id,
-        name: t.name,
-        color: t.color || defaultColors[0]
-      })) || []);
-    } catch (e) {
-      console.error('Error loading tags:', e);
+      if (data && data.length > 0) {
+        setTags(data.map(t => ({
+          id: t.id,
+          name: t.name,
+          color: t.color || defaultColors[0]
+        })));
+        return;
+      }
+      throw new Error('No remote tags');
+    } catch {
+      const saved = localStorage.getItem('ocean_flow_tags_focus');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTags(parsed);
+            return;
+          }
+        } catch {}
+      }
+      const initialTags: Tag[] = [
+        { id: 'tag-1', name: 'Estudo', color: defaultColors[0] },
+        { id: 'tag-2', name: 'Trabalho', color: defaultColors[1] },
+        { id: 'tag-3', name: 'Leitura', color: defaultColors[2] },
+      ];
+      setTags(initialTags);
+      localStorage.setItem('ocean_flow_tags_focus', JSON.stringify(initialTags));
     } finally {
       setLoading(false);
     }
@@ -68,14 +92,21 @@ export function TagSelector({ selectedTags, onTagsChange, className, compact = f
     if (!newTagName.trim() || !user) return;
     
     const colorIndex = tags.length % defaultColors.length;
-    const newTag = {
-      user_id: user.id,
-      name: newTagName.trim(),
-      color: defaultColors[colorIndex],
-      tag_type: 'focus'
-    };
+    const color = defaultColors[colorIndex];
+    const name = newTagName.trim();
 
     try {
+      if (!isSupabaseConfigured || user.id.startsWith('local-')) {
+        throw new Error('Local mode');
+      }
+
+      const newTag = {
+        user_id: user.id,
+        name,
+        color,
+        tag_type: 'focus'
+      };
+
       const { data, error } = await supabase
         .from('tags')
         .insert(newTag)
@@ -87,15 +118,27 @@ export function TagSelector({ selectedTags, onTagsChange, className, compact = f
       const tag: Tag = {
         id: data.id,
         name: data.name,
-        color: data.color || defaultColors[0]
+        color: data.color || color
       };
       
-      setTags([...tags, tag]);
+      const updated = [...tags, tag];
+      setTags(updated);
+      localStorage.setItem('ocean_flow_tags_focus', JSON.stringify(updated));
       onTagsChange([...selectedTags, tag]);
       setNewTagName('');
       setIsCreating(false);
-    } catch (e) {
-      console.error('Error creating tag:', e);
+    } catch {
+      const tag: Tag = {
+        id: 'tag-' + Date.now(),
+        name,
+        color
+      };
+      const updated = [...tags, tag];
+      setTags(updated);
+      localStorage.setItem('ocean_flow_tags_focus', JSON.stringify(updated));
+      onTagsChange([...selectedTags, tag]);
+      setNewTagName('');
+      setIsCreating(false);
     }
   };
 
@@ -110,18 +153,19 @@ export function TagSelector({ selectedTags, onTagsChange, className, compact = f
 
   const deleteTag = async (tagId: string) => {
     try {
-      const { error } = await supabase
-        .from('tags')
-        .delete()
-        .eq('id', tagId);
-
-      if (error) throw error;
-      
-      setTags(tags.filter(t => t.id !== tagId));
-      onTagsChange(selectedTags.filter(t => t.id !== tagId));
+      if (isSupabaseConfigured && !user?.id.startsWith('local-')) {
+        await supabase
+          .from('tags')
+          .delete()
+          .eq('id', tagId);
+      }
     } catch (e) {
       console.error('Error deleting tag:', e);
     }
+    const updated = tags.filter(t => t.id !== tagId);
+    setTags(updated);
+    localStorage.setItem('ocean_flow_tags_focus', JSON.stringify(updated));
+    onTagsChange(selectedTags.filter(t => t.id !== tagId));
   };
 
   if (loading) {

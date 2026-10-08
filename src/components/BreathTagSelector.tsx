@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, Check, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
 export interface BreathTag {
@@ -44,6 +44,10 @@ export function BreathTagSelector({ selectedTags, onTagsChange, className, compa
     if (!user) return;
     
     try {
+      if (!isSupabaseConfigured || user.id.startsWith('local-')) {
+        throw new Error('Local mode');
+      }
+
       const { data, error } = await supabase
         .from('tags')
         .select('*')
@@ -53,13 +57,33 @@ export function BreathTagSelector({ selectedTags, onTagsChange, className, compa
 
       if (error) throw error;
       
-      setTags(data?.map(t => ({
-        id: t.id,
-        name: t.name,
-        color: t.color || breathColors[0]
-      })) || []);
-    } catch (e) {
-      console.error('Error loading breath tags:', e);
+      if (data && data.length > 0) {
+        setTags(data.map(t => ({
+          id: t.id,
+          name: t.name,
+          color: t.color || breathColors[0]
+        })));
+        return;
+      }
+      throw new Error('No remote breath tags');
+    } catch {
+      const saved = localStorage.getItem('ocean_flow_tags_breath');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTags(parsed);
+            return;
+          }
+        } catch {}
+      }
+      const initialTags: BreathTag[] = [
+        { id: 'btag-1', name: 'Alongamento', color: breathColors[0] },
+        { id: 'btag-2', name: 'Água', color: breathColors[4] },
+        { id: 'btag-3', name: 'Descanso', color: breathColors[1] },
+      ];
+      setTags(initialTags);
+      localStorage.setItem('ocean_flow_tags_breath', JSON.stringify(initialTags));
     } finally {
       setLoading(false);
     }
@@ -69,14 +93,21 @@ export function BreathTagSelector({ selectedTags, onTagsChange, className, compa
     if (!newTagName.trim() || !user) return;
     
     const colorIndex = tags.length % breathColors.length;
-    const newTag = {
-      user_id: user.id,
-      name: newTagName.trim(),
-      color: breathColors[colorIndex],
-      tag_type: 'breath'
-    };
+    const color = breathColors[colorIndex];
+    const name = newTagName.trim();
 
     try {
+      if (!isSupabaseConfigured || user.id.startsWith('local-')) {
+        throw new Error('Local mode');
+      }
+
+      const newTag = {
+        user_id: user.id,
+        name,
+        color,
+        tag_type: 'breath'
+      };
+
       const { data, error } = await supabase
         .from('tags')
         .insert(newTag)
@@ -88,15 +119,27 @@ export function BreathTagSelector({ selectedTags, onTagsChange, className, compa
       const tag: BreathTag = {
         id: data.id,
         name: data.name,
-        color: data.color || breathColors[0]
+        color: data.color || color
       };
       
-      setTags([...tags, tag]);
+      const updated = [...tags, tag];
+      setTags(updated);
+      localStorage.setItem('ocean_flow_tags_breath', JSON.stringify(updated));
       onTagsChange([...selectedTags, tag]);
       setNewTagName('');
       setIsCreating(false);
-    } catch (e) {
-      console.error('Error creating breath tag:', e);
+    } catch {
+      const tag: BreathTag = {
+        id: 'btag-' + Date.now(),
+        name,
+        color
+      };
+      const updated = [...tags, tag];
+      setTags(updated);
+      localStorage.setItem('ocean_flow_tags_breath', JSON.stringify(updated));
+      onTagsChange([...selectedTags, tag]);
+      setNewTagName('');
+      setIsCreating(false);
     }
   };
 
@@ -111,18 +154,19 @@ export function BreathTagSelector({ selectedTags, onTagsChange, className, compa
 
   const deleteTag = async (tagId: string) => {
     try {
-      const { error } = await supabase
-        .from('tags')
-        .delete()
-        .eq('id', tagId);
-
-      if (error) throw error;
-      
-      setTags(tags.filter(t => t.id !== tagId));
-      onTagsChange(selectedTags.filter(t => t.id !== tagId));
+      if (isSupabaseConfigured && !user?.id.startsWith('local-')) {
+        await supabase
+          .from('tags')
+          .delete()
+          .eq('id', tagId);
+      }
     } catch (e) {
       console.error('Error deleting breath tag:', e);
     }
+    const updated = tags.filter(t => t.id !== tagId);
+    setTags(updated);
+    localStorage.setItem('ocean_flow_tags_breath', JSON.stringify(updated));
+    onTagsChange(selectedTags.filter(t => t.id !== tagId));
   };
 
   if (loading) {
