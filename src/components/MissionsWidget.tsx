@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Target } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { getTasks } from '@/lib/tasks';
 
 interface MissionsWidgetProps {
   onClick: () => void;
@@ -20,6 +21,13 @@ export function MissionsWidget({ onClick, compact = false }: MissionsWidgetProps
   useEffect(() => {
     if (user) {
       loadTaskCounts();
+      if (user.id.startsWith('local-')) {
+        const handleLocalUpdate = (event: Event) => {
+          if ((event as CustomEvent<{ userId: string }>).detail?.userId === user.id) loadTaskCounts();
+        };
+        window.addEventListener('ocean-flow-tasks-updated', handleLocalUpdate);
+        return () => window.removeEventListener('ocean-flow-tasks-updated', handleLocalUpdate);
+      }
       
       // Subscribe to realtime updates
       const channel = supabase
@@ -48,15 +56,7 @@ export function MissionsWidget({ onClick, compact = false }: MissionsWidgetProps
     if (!user) return;
     
     try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('completed')
-        .eq('user_id', user.id)
-        .eq('due_date', today);
-
-      if (error) throw error;
-      
-      const tasks = data || [];
+      const tasks = await getTasks(user.id, today);
       setTotalCount(tasks.length);
       setCompletedCount(tasks.filter(t => t.completed).length);
     } catch (error) {

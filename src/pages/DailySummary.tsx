@@ -4,8 +4,8 @@ import { ArrowLeft, Clock, Target, CheckCircle, SkipForward, RefreshCw, Tag } fr
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { getTotalFocusMinutesAsync, getTotalCompletedCyclesAsync, getTagStatsAsync } from '@/lib/database';
+import { getTotalFocusMinutesAsync, getTotalCompletedCyclesAsync, getTagStatsAsync, getCyclesAsync } from '@/lib/database';
+import { getTasks, Task } from '@/lib/tasks';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { AppShell } from '@/components/layout/AppShell';
 
@@ -56,21 +56,17 @@ const DailySummary = () => {
       const tagStats = await getTagStatsAsync(today, endOfDay);
       
       // Get skipped phases (not completed cycles)
-      const { count: skippedCount } = await supabase
-        .from('cycle_records')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user?.id)
-        .eq('completed', false)
-        .gte('created_at', today.toISOString())
-        .lte('created_at', endOfDay.toISOString());
+      const cycles = await getCyclesAsync(today, endOfDay);
+      const skippedCount = cycles.filter(cycle => !cycle.completed).length;
 
       // Get tasks - use local date string
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('due_date', todayStr);
+      let tasks: Task[] = [];
+      try {
+        tasks = user ? await getTasks(user.id, todayStr) : [];
+      } catch (taskError) {
+        console.error('Error loading daily summary tasks:', taskError);
+      }
 
       const tasksCompleted = tasks?.filter(t => t.completed).length || 0;
       const totalTasks = tasks?.length || 0;

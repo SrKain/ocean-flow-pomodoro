@@ -75,10 +75,15 @@ async function getCurrentUserId(): Promise<string | null> {
   }
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    return user?.id || null;
+    if (user?.id) return user.id;
   } catch {
-    return 'guest-user';
+    // Continue to the local account fallback below.
   }
+  const local = localStorage.getItem('ocean_flow_local_user');
+  if (local) {
+    try { return JSON.parse(local).id || null; } catch { return null; }
+  }
+  return null;
 }
 
 // Settings functions
@@ -171,7 +176,7 @@ export async function saveCycleRecordAsync(record: Omit<CycleRecord, 'id'>): Pro
   };
   saveCycleRecord(fullRecord);
 
-  if (!isSupabaseConfigured || userId.startsWith('local-')) {
+  if (!isSupabaseConfigured || userId.startsWith('local-') || userId === 'guest-user') {
     return id;
   }
 
@@ -225,8 +230,9 @@ export async function updateCycleRatingAsync(cycleId: string, rating: number): P
 }
 
 export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<CycleRecord[]> {
-  const getFilteredLocalCycles = (): CycleRecord[] => {
+  const getFilteredLocalCycles = (userId?: string | null): CycleRecord[] => {
     let cycles = getCycles();
+    if (userId) cycles = cycles.filter(cycle => cycle.userId === userId);
     if (startDate) {
       cycles = cycles.filter(c => new Date(c.startTime).getTime() >= startDate.getTime());
     }
@@ -242,28 +248,29 @@ export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<
 
   try {
     const userId = await getCurrentUserId();
-    if (!userId || userId.startsWith('local-')) return getFilteredLocalCycles();
+    if (!userId || userId.startsWith('local-')) return getFilteredLocalCycles(userId);
 
     let query = supabase
       .from('cycle_records')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+      .order('start_time', { ascending: true });
 
     if (startDate) {
-      query = query.gte('created_at', startDate.toISOString());
+      query = query.gte('start_time', startDate.toISOString());
     }
     if (endDate) {
-      query = query.lte('created_at', endDate.toISOString());
+      query = query.lte('start_time', endDate.toISOString());
     }
 
     const { data, error } = await query;
 
-    if (error || !data || data.length === 0) {
-      return getFilteredLocalCycles();
+    if (error) {
+      console.error('Error fetching cycles:', error);
+      return getFilteredLocalCycles(userId);
     }
 
-    return data.map(row => ({
+    const remoteCycles = (data || []).map(row => ({
       id: row.id,
       phase: row.phase as Phase,
       startTime: row.start_time,
@@ -277,6 +284,10 @@ export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<
       spotifyArtist: row.spotify_artist || undefined,
       spotifyAlbum: row.spotify_album || undefined,
     }));
+    const merged = new Map<string, CycleRecord>();
+    for (const cycle of getFilteredLocalCycles(userId)) merged.set(cycle.id, cycle);
+    for (const cycle of remoteCycles) merged.set(cycle.id, cycle);
+    return Array.from(merged.values()).sort((a, b) => a.startTime.localeCompare(b.startTime));
   } catch (e) {
     return getFilteredLocalCycles();
   }
@@ -349,7 +360,9 @@ export async function getTagStatsAsync(startDate?: Date, endDate?: Date): Promis
 export async function getRecentCyclesAsync(limit: number = 20, startDate?: Date, endDate?: Date): Promise<CycleRecord[]> {
   try {
     const userId = await getCurrentUserId();
-    if (!userId) return [];
+    if (!isSupabaseConfigured || !userId || userId.startsWith('local-')) {
+      return (await getCyclesAsync(startDate, endDate)).slice(-limit).reverse();
+    }
 
     let query = supabase
       .from('cycle_records')
@@ -359,20 +372,20 @@ export async function getRecentCyclesAsync(limit: number = 20, startDate?: Date,
       .limit(limit);
 
     if (startDate) {
-      query = query.gte('created_at', startDate.toISOString());
+      query = query.gte('start_time', startDate.toISOString());
     }
     if (endDate) {
-      query = query.lte('created_at', endDate.toISOString());
+      query = query.lte('start_time', endDate.toISOString());
     }
 
     const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching recent cycles:', error);
-      return [];
+      return (await getCyclesAsync(startDate, endDate)).slice(-limit).reverse();
     }
 
-    return (data || []).map(row => ({
+    const remoteCycles = (data || []).map(row => ({
       id: row.id,
       phase: row.phase as Phase,
       startTime: row.start_time,
@@ -386,6 +399,11 @@ export async function getRecentCyclesAsync(limit: number = 20, startDate?: Date,
       spotifyArtist: row.spotify_artist || undefined,
       spotifyAlbum: row.spotify_album || undefined,
     }));
+    const localCycles = (await getCyclesAsync(startDate, endDate)).filter(cycle => cycle.userId === userId);
+    const merged = new Map<string, CycleRecord>();
+    for (const cycle of localCycles) merged.set(cycle.id, cycle);
+    for (const cycle of remoteCycles) merged.set(cycle.id, cycle);
+    return Array.from(merged.values()).sort((a, b) => b.startTime.localeCompare(a.startTime)).slice(0, limit);
   } catch (e) {
     console.error('Error reading recent cycles:', e);
     return [];
@@ -498,7 +516,11 @@ export async function getDailyStatsAsync(startDate: Date, endDate: Date): Promis
 }
 
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    return (char === 'x' ? random : (random & 0x3) | 0x8).toString(16);
+  });
 }
 
 // Get rating statistics

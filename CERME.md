@@ -269,7 +269,7 @@ Otimizar a visualização do timer para suportar celulares e tablets em orienta�
 
 ### Comportamento
 A orientação e as faixas de viewport são detectadas dinamicamente via hook centralizado `useBreakpoint` (ao qual `useLandscapeMode` se conecta). O layout adapta-se de forma fluida: apresentação em duas colunas em desktop ou modo paisagem (coluna esquerda com anel polar, tempo e controles; coluna direita com painel de contexto de tags, notas e missões); e apresentação compacta de coluna única sem scroll vertical em modo retrato com acionamento do painel de contexto via gaveta/sheet inferior. Não há botão manual de tela cheia/fullscreen no código.
-Uma navegação global apresenta três destinos — Foco, Análises e Ajustes — em barra inferior abaixo de 900 px e rail lateral a partir de 900 px. A rota `/summary` permanece acessível por um atalho dentro do Dashboard e marca Análises como destino ativo.
+Uma navegação global apresenta três destinos — Foco, Análises e Ajustes — em barra inferior abaixo de 900 px e rail lateral a partir de 900 px. A rota `/summary` permanece acessível por um atalho dentro do Dashboard e marca Análises como destino ativo. As rotas da SPA contam com fallback `public/_redirects` para que hospedagens compatíveis entreguem `index.html` ao abrir ou atualizar uma URL interna diretamente.
 
 ### Entrada
 Giro físico do dispositivo móvel ou redimensionamento da janela do navegador (detecção automática por listeners de resize e orientationchange).
@@ -301,6 +301,7 @@ Ajuste responsivo unificado de `PomodoroTimer.tsx`.
 - Registrado na implantação da governança (STORY-0001).
 - Corrigido na etapa E2 (STORY-0004): remoção da menção a botão manual de fullscreen e documentação da composição modular responsiva com duas colunas e sheet.
 - Navegação principal responsiva em três destinos registrada; resumo diário acessível a partir do Dashboard (STORY-0005).
+- Fallback de URL interna incluído para hosts que reconhecem o formato `_redirects` (STORY-0006).
 
 ---
 
@@ -634,16 +635,17 @@ Ativa
 Gamificar o dia de trabalho com metas claras de produtividade (ex: completar 4 ciclos, acumular 100 minutos de mergulho, manter foco em tag específica).
 
 ### Comportamento
-Exibe uma barra de progresso compacta na interface (`MissionsWidget`). Ao clicar, abre o modal `MissionsPopup` com lista detalhada de missões do dia, checklist de tarefas da tabela `tasks` e indicador percentual de conclusão.
+Exibe uma barra de progresso compacta na interface (`MissionsWidget`). Ao clicar, abre o modal `MissionsPopup` com lista detalhada de missões do dia, checklist de tarefas e indicador percentual de conclusão. O módulo `tasks.ts` usa o Supabase para contas conectadas e armazenamento local separado por usuário no modo convidado ou sem configuração do backend; erros de leitura permitem tentar novamente.
 
 ### Entrada
 Cliques para marcar tarefas como concluídas ou consultar missões.
 
 ### Saída
-Progresso recalculado e tarefas atualizadas na tabela `tasks`.
+Progresso recalculado e tarefas atualizadas na tabela `tasks` ou no armazenamento local da conta convidada.
 
 ### Regras
 - Tarefas têm suporte a data de vencimento (`due_date`) e status booleano `completed`.
+- Dados locais de tarefas são isolados por usuário convidado.
 
 ### Estados
 - Widget minimizado
@@ -654,11 +656,12 @@ Progresso recalculado e tarefas atualizadas na tabela `tasks`.
 Canto superior da tela inicial e modal central.
 
 ### Dependências
-`MissionsWidget.tsx`, `MissionsPopup.tsx`, `database.ts`.
+`MissionsWidget.tsx`, `MissionsPopup.tsx`, `tasks.ts`, Supabase.
 
 ### Arquivos relacionados
 - `src/components/MissionsWidget.tsx`
 - `src/components/MissionsPopup.tsx`
+- `src/lib/tasks.ts`
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
@@ -707,6 +710,7 @@ Botão de conexão no `NowPlaying.tsx` e `Settings.tsx`.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Persistência local para convidado e estado de erro recuperável adicionados (STORY-0006).
 - Persistência local de contingência e renovação resiliente de token adicionadas (STORY-0005).
 
 ---
@@ -801,7 +805,7 @@ Ativa
 Apresentar visão consolidada do desempenho do usuário com gráficos de tempo focado, ciclos completados, evolução diária e histórico recente.
 
 ### Comportamento
-Página `/dashboard` que consulta o histórico de ciclos (`getCyclesAsync`, `getDailyStatsAsync`, `getTagStatsAsync`) e renderiza gráficos interativos usando a biblioteca `recharts` (BarChart, PieChart, LineChart). Permite filtrar por intervalos de datas e visualizar os últimos 20 ciclos detalhados.
+Página `/dashboard` que consulta o histórico de ciclos (`getCyclesAsync`, `getDailyStatsAsync`, `getTagStatsAsync`) e renderiza gráficos interativos usando a biblioteca `recharts` (BarChart, PieChart, LineChart). Combina dados locais e remotos por ID, filtra pela data de início da fase e apresenta ciclos recentes também no modo local. Permite filtrar por intervalos de datas e visualizar os ciclos mais recentes.
 
 ### Entrada
 Navegação para a rota `/dashboard` e filtros temporais (7 dias, 30 dias, total).
@@ -812,6 +816,8 @@ Métricas chave (Total de minutos focados, ciclos finalizados, média diária) e
 ### Regras
 - Cálculos consideram apenas a fase de Mergulho (`dive`) para contabilização de tempo focado real.
 - Ciclos contam a partir da finalização da Respiração (`breath`).
+- IDs novos de ciclo seguem UUID para compatibilidade com a chave primária do banco.
+- Falhas de leitura encerram o estado de carregamento do Dashboard.
 
 ### Estados
 - Carregando
@@ -830,6 +836,7 @@ Rota `/dashboard`, componente `Dashboard.tsx`.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Leitura local/remota, filtros por início da fase e estado de erro do painel ajustados (STORY-0006).
 
 ---
 
@@ -918,7 +925,7 @@ Ativa
 Prover uma tela dedicada ao balanço do dia corrente, comparando tempo focado, fases puladas e metas concluídas.
 
 ### Comportamento
-Página acessível pela rota `/summary`. Apresenta cards resumidos de minutos focados no dia, total de ciclos completos, quantidade de fases que foram puladas antes do tempo e tarefas concluídas da lista de metas.
+Página acessível pela rota `/summary`. Apresenta cards resumidos de minutos focados no dia, total de ciclos completos, quantidade de fases que foram puladas antes do tempo e tarefas concluídas da lista de metas. Ciclos e missões usam as mesmas fontes híbridas do Dashboard e do widget de missões.
 
 ### Entrada
 Navegação para a rota `/summary`.
@@ -944,6 +951,7 @@ Rota `/summary`, componente `DailySummary.tsx`.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Resumo diário alinhado à persistência híbrida de ciclos e tarefas (STORY-0006).
 
 ---
 
@@ -961,6 +969,7 @@ Página `/settings`:
 - Padrões iniciais de 5 minutos para Imersão, 30 para Mergulho e 10 para Respiração.
 - Salva na tabela `pomodoro_settings` com fallback local.
 - Botão "Enviar resumo diário por email" que aciona a Supabase Edge Function `daily-email-summary` enviando os dados de produtividade do dia via SMTP.
+- A ação exige sessão Supabase válida; mensagens informam falhas de autenticação ou configuração.
 
 ### Entrada
 Valores de tempo em minutos e clique no botão de envio de email.
@@ -970,6 +979,7 @@ Configurações salvas e notificação toast de sucesso ou erro do envio de emai
 
 ### Regras
 - Requer credenciais SMTP válidas configuradas no backend Supabase para sucesso do envio de email.
+- A função rejeita sessões inválidas e chamadas sem autenticação, sem interpretar falha de autenticação como envio em lote.
 - Tempos devem ser inteiros positivos.
 
 ### Estados
@@ -990,6 +1000,7 @@ Rota `/settings`, componente `Settings.tsx`.
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
 - Padrões e migração de configurações antigas alinhados em 5/30/10 minutos (STORY-0005).
+- Erros de autenticação/configuração de email expostos e envio em lote não autorizado bloqueado (STORY-0006).
 
 ---
 
@@ -1062,6 +1073,7 @@ Card com texto analítico gerado e recomendações práticas.
 ### Regras
 - Depende de chave de API configurada no backend da Edge Function (`ai-insights`).
 - Em caso de falha de conexão com a função, exibe mensagem descritiva sem travar o restante do dashboard.
+- Respostas vazias, falta de dados, falhas de autenticação e configuração recebem estados e mensagens explícitos.
 
 ### Estados
 - Não solicitado / Carregando análise / Exibindo insights / Erro de comunicação
@@ -1078,6 +1090,7 @@ Card na página `/dashboard`.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Estados vazios e falhas da função ficaram explícitos (STORY-0006).
 
 ---
 
@@ -1094,6 +1107,7 @@ O módulo `database.ts` atua como facade inteligente sobre `supabase/client.ts` 
 - Toda gravação prioritariamente salva no `localStorage` via `storage.ts`.
 - Se o Supabase estiver configurado e o usuário for remoto, replica assincronamente para as tabelas correspondentes.
 - Se qualquer requisição remota falhar por timeout ou erro de rede, o retorno dos métodos analíticos recorre imediatamente aos dados do `localStorage`.
+- Ciclos locais e remotos são combinados por UUID nas consultas analíticas; registros locais que ainda não foram sincronizados permanecem disponíveis.
 
 ### Entrada
 Chamadas a `getSettingsAsync`, `saveSettingsAsync`, `saveCycleRecordAsync`, `updateCycleRatingAsync`, `getCyclesAsync`, etc.
@@ -1122,3 +1136,4 @@ Transparente a todas as telas da aplicação.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Consolidação dos registros locais e remotos por UUID (STORY-0006).

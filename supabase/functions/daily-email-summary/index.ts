@@ -146,17 +146,20 @@ const handler = async (req: Request): Promise<Response> => {
     const smtpPass = Deno.env.get("SMTP_PASS");
     const fromEmail = Deno.env.get("SMTP_FROM_EMAIL");
 
-    if (!smtpHost || !smtpUser || !smtpPass || !fromEmail) {
-      console.error("Missing SMTP configuration");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!smtpHost || !smtpUser || !smtpPass || !fromEmail || !supabaseUrl || !serviceRoleKey || !anonKey) {
+      console.error("Missing email or Supabase server configuration");
       return new Response(
-        JSON.stringify({ error: "Missing SMTP configuration" }),
+        JSON.stringify({ error: "Configuração de email incompleta no servidor. Verifique as credenciais SMTP e do Supabase." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      supabaseUrl,
+      serviceRoleKey
     );
 
     // Calculate "today" based on America/Sao_Paulo (BRT) and convert boundaries to UTC.
@@ -192,17 +195,24 @@ const handler = async (req: Request): Promise<Response> => {
     const authHeader = req.headers.get("Authorization");
     if (authHeader?.startsWith("Bearer ")) {
       const userClient = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        supabaseUrl,
+        anonKey,
         { global: { headers: { Authorization: authHeader } } }
       );
 
       const { data: userData, error: userError } = await userClient.auth.getUser();
-      if (userError) {
-        console.warn("Could not resolve authenticated user; falling back to batch mode:", userError);
-      } else {
-        targetUserId = userData.user?.id ?? null;
+      if (userError || !userData.user) {
+        return new Response(JSON.stringify({ error: "Sessão inválida. Entre novamente para enviar seu resumo." }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+      targetUserId = userData.user.id;
+    } else {
+      return new Response(JSON.stringify({ error: "Entre na sua conta para enviar o resumo por email." }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log(`Processing summaries for ${dateStr}`);

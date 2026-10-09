@@ -123,6 +123,17 @@
 - **Arquivos principais**: `PrimaryNavigation.tsx`, `AppShell.tsx`, `TimerHeader.tsx`, `PomodoroTimer.tsx`, `TimerModals.tsx`, `useSpotify.tsx`, `useSessionSync.ts`, `database.ts`, `storage.ts`, `Settings.tsx`, `Dashboard.tsx`.
 - **Histórico**:
   - 2026-10-09: Implementação aprovada e concluída; build pendente porque npm e node_modules não estão disponíveis no ambiente (STORY-0005).
+
+### BL-021 — Correções de Dados, Insights, Rotas, Email e Missões
+- **Status**: Em andamento (correções de código implementadas; configuração remota e publicação pendentes de confirmação)
+- **Tipo**: Correção / Persistência / Integrações / Navegação
+- **Solicitado por**: Usuário
+- **Data de Início**: 2026-10-09
+- **Relacionado a**: CERME (MEC-015, MEC-019, MEC-022, MEC-023, MEC-025, MEC-026)
+- **Descrição**: Corrigir incompatibilidade de UUID e agregação/fallback de ciclos que impediam o Dashboard de mostrar dados; expor estados vazios/erros dos Insights IA; adicionar fallback SPA para URLs diretas; centralizar missões com armazenamento local por usuário convidado e alinhar o Resumo Diário; melhorar o diagnóstico do envio de email e rejeitar autenticação inválida sem permitir que uma chamada individual seja interpretada como envio em lote. A confirmação de Secrets SMTP/IA, migrações no Supabase ativo e comportamento de publicação do Lovable Cloud depende do ambiente remoto.
+- **Arquivos principais**: `src/lib/database.ts`, `src/lib/tasks.ts`, `src/pages/Dashboard.tsx`, `src/pages/DailySummary.tsx`, `src/components/AIInsightsCard.tsx`, `src/components/MissionsPopup.tsx`, `src/components/MissionsWidget.tsx`, `src/pages/Settings.tsx`, `supabase/functions/daily-email-summary/index.ts`, `public/_redirects`.
+- **Histórico**:
+  - 2026-10-09: Plano aprovado expressamente pelo usuário; implementação iniciada (STORY-0006).
 ---
 
 ## 3. Tarefas Planejadas (Aprovadas)

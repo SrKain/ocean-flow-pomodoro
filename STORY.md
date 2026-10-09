@@ -251,3 +251,56 @@ Implementado. O build não pôde ser executado: `npm` não está disponível no 
 Observações:
 - O fallback local de tokens Spotify é separado por usuário e removido em desconexão explícita ou resposta `invalid_grant`.
 - A validação visual em navegador e a compilação permanecem pendentes por indisponibilidade do gerenciador de pacotes/dependências neste ambiente.
+
+---
+
+## STORY-0006 — Recuperação de Dashboard, Insights, Rotas, Email e Missões
+
+Data:
+2026-10-09
+
+Solicitado por:
+Usuário
+
+Executado por:
+OpenAI Codex
+
+Plataforma:
+Codex Desktop
+
+Modelo:
+GPT-6
+
+Resumo:
+Corrigida a geração de IDs de ciclos para UUID, o formato exigido pela chave primária do Supabase. As consultas analíticas agora filtram pela data de início da fase, combinam registros remotos e locais sem duplicação e mantêm acesso aos ciclos recentes no modo convidado; o Dashboard encerra o estado de carregamento em caso de erro. Criada uma camada única de tarefas que mantém missões por usuário no armazenamento local no modo convidado, reutilizada pelo widget, modal e Resumo Diário, com opção de tentar carregar novamente. O cartão de Insights agora traduz erros de configuração/autenticação e mostra estado útil quando a resposta vier vazia. O envio manual de email exige autenticação válida, exibe erros de configuração com clareza e não converte falha de autenticação em envio em lote. Adicionada regra de fallback SPA em `public/_redirects` para hosts que suportam esse formato. Configuração efetiva de secrets e publicação remota permanecem não confirmadas.
+
+Arquivos criados/alterados:
+- `BACKLOGGER.md` (registro de BL-021)
+- `CERME.md` (atualização de MEC-015, MEC-019, MEC-022, MEC-023, MEC-025 e MEC-026)
+- `STORY.md` (criação deste registro STORY-0006)
+- `public/_redirects` (fallback de rotas SPA para hospedagem compatível)
+- `src/lib/database.ts` (UUID, merge local/remoto e consultas recentes no fallback)
+- `src/lib/tasks.ts` (criado: persistência de missões remota/local por usuário)
+- `src/components/MissionsPopup.tsx` (uso da camada de tarefas e erro recuperável)
+- `src/components/MissionsWidget.tsx` (uso das tarefas locais ou remotas)
+- `src/pages/DailySummary.tsx` (ciclos e tarefas pela camada híbrida)
+- `src/pages/Dashboard.tsx` (encerramento de carregamento após falha)
+- `src/components/AIInsightsCard.tsx` (estado vazio e mensagens de erro explícitas)
+- `src/pages/Settings.tsx` (mensagens e requisito de sessão no envio de email)
+- `supabase/functions/daily-email-summary/index.ts` (validação das configurações e rejeição de sessão inválida/chamada sem usuário)
+
+Funcionalidades afetadas:
+- MEC-015: missões no Supabase para contas conectadas e persistência local para convidados.
+- MEC-019 / MEC-026: dados analíticos de ciclos conciliados por UUID entre a origem local e remota.
+- MEC-022: contagem de tarefas e fases puladas baseada nas fontes compartilhadas.
+- MEC-023: fluxo de email autenticado com retorno mais claro de configuração e sessão.
+- MEC-025: respostas vazias, erros de configuração e autenticação comunicados no cartão.
+- Rotas SPA: fallback de host adicionado em formato `_redirects`.
+
+Resultado:
+Implementado no código. Build, teste visual, envio real de email, geração de insight com credenciais ativas, status das migrações no Supabase e suporte a `_redirects` no deploy não foram confirmados neste ambiente.
+
+Observações:
+- Nenhum registro existente de ciclo ou tarefa foi removido.
+- A hospedagem Lovable Cloud é indicada no plano local do projeto; o fallback entregue precisa ser reconhecido pela plataforma de publicação para corrigir 404 em URLs diretas.
+- O envio de email continua dependendo de SMTP e secrets válidos no projeto Supabase; a chave de IA depende da configuração `LOVABLE_API_KEY`.

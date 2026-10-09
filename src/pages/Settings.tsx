@@ -7,9 +7,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/layout/AppShell";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Settings() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [settings, setSettings] = useState<PomodoroSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -29,12 +31,18 @@ export default function Settings() {
   };
 
   const handleSendDailyEmail = async () => {
+    if (!user || user.id.startsWith('local-')) {
+      toast.error("O envio por email exige uma conta conectada. Entre na sua conta e tente novamente.");
+      return;
+    }
     setSendingEmail(true);
     try {
       const { data, error } = await supabase.functions.invoke('daily-email-summary');
       
       if (error) {
-        toast.error("Erro ao enviar email: " + error.message);
+        toast.error("Não foi possível enviar o resumo: " + error.message);
+      } else if (data?.error) {
+        toast.error(data.error);
       } else if (data?.emailsSent > 0) {
         toast.success(`Email enviado com sucesso! (${data.emailsSent} email(s))`);
       } else if (data?.emailsFailed > 0) {
@@ -45,7 +53,7 @@ export default function Settings() {
         toast.info("Nenhum email enviado - sem atividade registrada hoje.");
       }
     } catch (err) {
-      toast.error("Erro ao enviar email");
+      toast.error(err instanceof Error ? `Não foi possível enviar o resumo: ${err.message}` : "Não foi possível enviar o resumo.");
     } finally {
       setSendingEmail(false);
     }

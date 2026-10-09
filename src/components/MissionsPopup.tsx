@@ -3,17 +3,8 @@ import { X, Plus, Trash2, CheckCircle2, Circle, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-
-interface Task {
-  id: string;
-  title: string;
-  completed: boolean;
-  created_at: string;
-  completed_at: string | null;
-  due_date: string;
-}
+import { addTask as createTask, getTasks, removeTask, setTaskCompleted, Task } from '@/lib/tasks';
 
 interface MissionsPopupProps {
   isOpen: boolean;
@@ -26,6 +17,7 @@ export function MissionsPopup({ isOpen, onClose }: MissionsPopupProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   // Use local date to ensure tasks match user's timezone
   const now = new Date();
@@ -38,18 +30,14 @@ export function MissionsPopup({ isOpen, onClose }: MissionsPopupProps) {
   }, [user, isOpen]);
 
   const loadTasks = async () => {
+    if (!user) return;
+    setLoading(true);
+    setLoadError(false);
     try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('due_date', today)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setTasks(data || []);
+      setTasks(await getTasks(user.id, today));
     } catch (error) {
       console.error('Error loading tasks:', error);
+      setLoadError(true);
       toast({
         title: 'Erro ao carregar tarefas',
         variant: 'destructive',
@@ -63,18 +51,8 @@ export function MissionsPopup({ isOpen, onClose }: MissionsPopupProps) {
     if (!newTaskTitle.trim() || !user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert({
-          user_id: user.id,
-          title: newTaskTitle.trim(),
-          due_date: today,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      setTasks([...tasks, data]);
+      const created = await createTask(user.id, newTaskTitle.trim(), today);
+      setTasks(current => [...current, created]);
       setNewTaskTitle('');
       toast({ title: 'Missão adicionada!' });
     } catch (error) {
@@ -88,21 +66,9 @@ export function MissionsPopup({ isOpen, onClose }: MissionsPopupProps) {
 
   const toggleTask = async (task: Task) => {
     try {
-      const newCompleted = !task.completed;
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          completed: newCompleted,
-          completed_at: newCompleted ? new Date().toISOString() : null,
-        })
-        .eq('id', task.id);
-
-      if (error) throw error;
-      setTasks(tasks.map(t => 
-        t.id === task.id 
-          ? { ...t, completed: newCompleted, completed_at: newCompleted ? new Date().toISOString() : null }
-          : t
-      ));
+      if (!user) return;
+      const updated = await setTaskCompleted(user.id, task, !task.completed);
+      setTasks(current => current.map(item => item.id === task.id ? updated : item));
     } catch (error) {
       console.error('Error toggling task:', error);
       toast({
@@ -114,13 +80,9 @@ export function MissionsPopup({ isOpen, onClose }: MissionsPopupProps) {
 
   const deleteTask = async (taskId: string) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
-
-      if (error) throw error;
-      setTasks(tasks.filter(t => t.id !== taskId));
+      if (!user) return;
+      await removeTask(user.id, taskId);
+      setTasks(current => current.filter(t => t.id !== taskId));
       toast({ title: 'Missão removida' });
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -209,6 +171,11 @@ export function MissionsPopup({ isOpen, onClose }: MissionsPopupProps) {
           {loading ? (
             <div className="text-center text-muted-foreground py-8">
               Carregando...
+            </div>
+          ) : loadError ? (
+            <div className="py-8 text-center space-y-3">
+              <p className="text-sm text-muted-foreground">Não foi possível carregar suas missões.</p>
+              <Button variant="secondary" onClick={loadTasks}>Tentar novamente</Button>
             </div>
           ) : tasks.length === 0 ? (
             <div className="text-center py-8">

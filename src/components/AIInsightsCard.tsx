@@ -31,13 +31,18 @@ export function AIInsightsCard({ period }: AIInsightsCardProps) {
           setError("Muitas requisições. Tente novamente em alguns minutos.");
         } else if (data.error === "Credits exhausted") {
           setError("Créditos de IA esgotados.");
+        } else if (data.error === "AI not configured") {
+          setError("O serviço de IA ainda não foi configurado no servidor.");
+        } else if (data.error === "Unauthorized" || data.error === "No authorization header") {
+          setError("Entre em uma conta conectada para gerar insights personalizados.");
         } else {
-          setError(data.error);
+          setError("Não foi possível gerar o insight agora. Tente novamente.");
         }
         return;
       }
 
-      setInsight(data?.insight || null);
+      const result = typeof data?.insight === 'string' ? data.insight.trim() : '';
+      setInsight(result || null);
     } catch (err) {
       console.error("Error fetching insights:", err);
       setError("Erro ao conectar com o serviço de IA");
@@ -93,10 +98,12 @@ export function AIInsightsCard({ period }: AIInsightsCardProps) {
             <AlertCircle className="w-4 h-4" />
             <span className="text-sm">{error}</span>
           </div>
-        ) : (
+        ) : insight ? (
           <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
             {insight}
           </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Ainda não há dados suficientes para gerar um insight. Complete um ciclo de foco e tente novamente.</p>
         )}
       </div>
     </div>

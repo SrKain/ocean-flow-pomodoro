@@ -154,6 +154,9 @@ const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
       setBreathStats(breath);
       setGroupStats(groups);
       setLoading(false);
+    }).catch((error) => {
+      console.error('Error loading dashboard data:', error);
+      setLoading(false);
     });
   }, [dateRange]);
 
