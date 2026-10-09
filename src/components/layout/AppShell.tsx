@@ -1,11 +1,14 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { PrimaryNavigation } from './PrimaryNavigation';
 
 interface AppShellProps {
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '1440' | 'full';
+  showNavigation?: boolean;
 }
 
 const maxWidthMap = {
@@ -23,11 +26,17 @@ export const AppShell: React.FC<AppShellProps> = ({
   className,
   contentClassName,
   maxWidth = '1440',
+  showNavigation = true,
 }) => {
+  const { isBottomNav } = useBreakpoint();
+
   return (
     <div
       className={cn(
         'min-h-[100dvh] w-full overflow-x-hidden text-foreground',
+        showNavigation && (isBottomNav
+          ? 'pb-[calc(5rem+env(safe-area-inset-bottom))]'
+          : 'pl-[76px]'),
         'bg-[#020b14]',
         className
       )}
@@ -45,6 +54,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       >
         {children}
       </div>
+      {showNavigation && <PrimaryNavigation />}
     </div>
   );
 };

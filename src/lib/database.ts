@@ -53,9 +53,9 @@ export interface MusicFocusStats {
 }
 
 const defaultSettings: PomodoroSettings = {
-  immersionMinutes: 25,
-  diveMinutes: 25,
-  breathMinutes: 5,
+  immersionMinutes: 5,
+  diveMinutes: 30,
+  breathMinutes: 10,
   autoAdvance: false,
 };
 
@@ -102,12 +102,36 @@ export async function getSettingsAsync(): Promise<PomodoroSettings> {
       return localSettings;
     }
 
-    return {
+    const remoteSettings: PomodoroSettings = {
       immersionMinutes: data.immersion_minutes,
       diveMinutes: data.dive_minutes,
       breathMinutes: data.breath_minutes,
       autoAdvance: data.auto_advance ?? false,
     };
+
+    const legacyDefaults = [
+      [25, 25, 5], // padrão remoto anterior
+      [25, 5, 5],  // padrão local anterior
+    ];
+    const matchesLegacyDefault = legacyDefaults.some(([immersion, dive, breath]) =>
+      remoteSettings.immersionMinutes === immersion &&
+      remoteSettings.diveMinutes === dive &&
+      remoteSettings.breathMinutes === breath
+    );
+
+    if (!matchesLegacyDefault) return remoteSettings;
+
+    const migratedSettings = { ...defaultSettings, autoAdvance: remoteSettings.autoAdvance };
+    saveSettings(migratedSettings);
+    await supabase
+      .from('pomodoro_settings')
+      .update({
+        immersion_minutes: migratedSettings.immersionMinutes,
+        dive_minutes: migratedSettings.diveMinutes,
+        breath_minutes: migratedSettings.breathMinutes,
+      })
+      .eq('user_id', userId);
+    return migratedSettings;
   } catch (e) {
     return localSettings;
   }

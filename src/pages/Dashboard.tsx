@@ -193,6 +193,12 @@ const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </Link>
           <h1 className="text-2xl font-semibold text-foreground flex-1">Dashboard</h1>
+          <Link
+            to="/summary"
+            className="flex min-h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-medium text-foreground/80 transition hover:bg-white/10 hover:text-foreground"
+          >
+            Resumo do dia
+          </Link>
           <button
             onClick={() => setTagManagementOpen(true)}
             className="w-12 h-12 rounded-full glass-button flex items-center justify-center"

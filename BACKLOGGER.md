@@ -87,6 +87,7 @@
   - 2026-10-08: Registrada como Planejada com aprovação do usuário.
   - 2026-10-09: Concluída e validada na etapa E2 (STORY-0004).
 
+
 ---
 
 ## 2. Tarefas em Andamento
@@ -111,6 +112,17 @@
 - **Histórico**:
   - 2026-10-08: plano aprovado explicitamente pelo usuário; execução iniciada pela Fase 1.
 
+
+### BL-020 — Navegação, Overfocus, Padrões de Ciclo e Persistência Spotify
+- **Status**: Em andamento (implementação concluída; validação de build pendente)
+- **Tipo**: Correção de UX / Timer / Persistência
+- **Solicitado por**: Usuário
+- **Data de Início**: 2026-10-09
+- **Relacionado a**: BL-011, BL-015, BL-017, BL-019; CERME (MEC-001, MEC-004, MEC-006, MEC-016, MEC-017, MEC-023)
+- **Descrição**: Substituir atalhos do cabeçalho por navegação global em três destinos responsivos (Foco, Análises e Ajustes); manter o overfocus no timer, com botão visível de conclusão e registro do tempo extra; alinhar os padrões de duração em 5/30/10 minutos, migrando apenas os antigos padrões conhecidos e a sessão inicial parada; restaurar tokens Spotify do Supabase ou da cópia local do usuário, compartilhar renovações concorrentes e preservar credenciais em falhas temporárias.
+- **Arquivos principais**: `PrimaryNavigation.tsx`, `AppShell.tsx`, `TimerHeader.tsx`, `PomodoroTimer.tsx`, `TimerModals.tsx`, `useSpotify.tsx`, `useSessionSync.ts`, `database.ts`, `storage.ts`, `Settings.tsx`, `Dashboard.tsx`.
+- **Histórico**:
+  - 2026-10-09: Implementação aprovada e concluída; build pendente porque npm e node_modules não estão disponíveis no ambiente (STORY-0005).
 ---
 
 ## 3. Tarefas Planejadas (Aprovadas)
@@ -123,6 +135,7 @@
 - **Descrição**: Estruturar navegação em três destinos: Foco, Análises e Ajustes. Barra inferior em telas < 900px recolhida com timer rodando; rail lateral para >= 900px. Mover PiP para controle do timer e Missões/Tags para sheet. Timer ininterrupto entre rotas. Remover duplicidade de evolução diária entre Resumo e Dashboard. NotFound em português no tema do app. Padronizar nome Ocean Flow.
 - **Histórico**:
   - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+  - 2026-10-09: Barra inferior/rail em três destinos implementada em STORY-0005; PiP no controle do timer e demais itens da etapa permanecem pendentes.
 
 ### BL-016 — E4: Arquitetura de Picture-in-Picture Desacoplada e Mini-Timer Fallback
 - **Status**: Planejada
@@ -141,6 +154,7 @@
 - **Descrição**: Play após conclusão abre próxima fase. Overfocus ajustado conforme decisão D3 (parar antes para perguntar ao usuário). Confirmação de reset/edição quando há progresso. Validação de inputs em Settings ao sair do campo (sem fallback ao apagar) e unificação de limites com constante compartilhada.
 - **Histórico**:
   - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+  - 2026-10-09: Overfocus atualizado em STORY-0005 para permanecer no timer com ação direta de conclusão; os demais itens da etapa permanecem pendentes.
 
 ### BL-018 — E6: Acessibilidade WCAG AA, Diálogos Radix, Semântica e Reduced Motion
 - **Status**: Planejada
@@ -159,6 +173,7 @@
 - **Descrição**: Tratamento de estados do Spotify (desconectado, conectado sem faixa, tocando, erro). Exibir status de permissão de notificações em Ajustes. DailyRatingPrompt sem cobrir sessão em andamento (D7). Fallbacks locais para tags/missões em modo convidado e avisos de dados locais conforme D5.
 - **Histórico**:
   - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+  - 2026-10-09: Tokens Spotify agora têm cópia local de contingência e renovação resiliente (STORY-0005); os demais itens da etapa permanecem pendentes.
 
 ---
 

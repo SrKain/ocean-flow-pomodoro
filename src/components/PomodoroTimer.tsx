@@ -9,6 +9,7 @@ import { ControlButtons } from "./ControlButtons";
 import { Tag } from "./TagSelector";
 import { BreathTag } from "./BreathTagSelector";
 import { TimerHeader } from "./timer/TimerHeader";
+import { PrimaryNavigation } from "./layout/PrimaryNavigation";
 import { FocusContextPanel } from "./timer/FocusContextPanel";
 import { TimerModals } from "./timer/TimerModals";
 import { useDocumentPipSupport } from "./DocumentPictureInPicture";
@@ -36,7 +37,6 @@ export function PomodoroTimer() {
   const [showRatingPopup, setShowRatingPopup] = useState(false);
   const [showMissionsPopup, setShowMissionsPopup] = useState(false);
   const [showPip, setShowPip] = useState(false);
-  const [showOverfocusPopup, setShowOverfocusPopup] = useState(false);
   const [showContextSheet, setShowContextSheet] = useState(false);
 
   // Persistência local de tags e notas da sessão
@@ -84,7 +84,7 @@ export function PomodoroTimer() {
   const { signOut } = useAuth();
   const { currentTrack } = useSpotify();
   const navigate = useNavigate();
-  const { width, height, isLandscape, isShortLandscape, isCompact, isDesktop, isDesktopCompact } = useBreakpoint();
+  const { width, height, isLandscape, isShortLandscape, isCompact, isDesktop, isDesktopCompact, isBottomNav } = useBreakpoint();
   const { notifyPhaseComplete, notifyOverfocus, notifyCycleComplete, requestPermission } = useNotifications();
 
   // Sincronização contínua com localStorage
@@ -134,14 +134,14 @@ export function PomodoroTimer() {
   // Derived state from session
   const currentPhase = (session?.current_phase as Phase) || 'immersion';
   const timeLeft = session?.time_left || 0;
-  const totalTime = session?.total_time || (settings?.immersionMinutes || 25) * 60;
+  const totalTime = session?.total_time || (settings?.immersionMinutes || 5) * 60;
   const isRunning = session?.is_running || false;
   const cycleCount = session?.cycle_count || 0;
   const isOvertime = session?.is_overtime || false;
   const extraTime = session?.extra_time_seconds || 0;
 
   const getPhaseTime = useCallback((phase: Phase) => {
-    if (!settings) return 25 * 60;
+    if (!settings) return 5 * 60;
     switch (phase) {
       case 'immersion': return settings.immersionMinutes * 60;
       case 'dive': return settings.diveMinutes * 60;
@@ -219,12 +219,9 @@ export function PomodoroTimer() {
     });
 
     notifyOverfocus();
-    setShowOverfocusPopup(true);
   }, [updateSession, notifyOverfocus]);
 
   const handleOverfocusDecision = useCallback(async (_includeExtraTime: boolean) => {
-    setShowOverfocusPopup(false);
-
     updateSession({
       is_running: false,
       is_overtime: false,
@@ -429,7 +426,10 @@ export function PomodoroTimer() {
 
   return (
     <div
-      className="focus-shell relative flex min-h-[100dvh] w-full flex-col justify-between overflow-hidden transition-all duration-1000 ease-in-out"
+      className={cn(
+        "focus-shell relative flex min-h-[100dvh] w-full flex-col justify-between overflow-hidden transition-all duration-1000 ease-in-out",
+        isBottomNav ? 'pb-[calc(5rem+env(safe-area-inset-bottom))]' : 'pl-[76px]'
+      )}
       style={backgroundStyle}
     >
       {/* Top Header Compartilhado */}
@@ -437,7 +437,6 @@ export function PomodoroTimer() {
         <TimerHeader
           onOpenPip={() => setShowPip(true)}
           onLogout={handleLogout}
-          compact={isCompact}
         />
       </div>
 
@@ -490,10 +489,10 @@ export function PomodoroTimer() {
                   compact={isShortLandscape}
                 />
 
-                {isRunning && !isOvertime && (
+                {isRunning && (
                   <button
                     type="button"
-                    onClick={handleCompleteCycle}
+                    onClick={() => isOvertime ? handleOverfocusDecision(true) : handleCompleteCycle()}
                     className="flex min-h-[44px] items-center gap-2 rounded-full border border-white/10 bg-slate-900/30 px-5 py-2 text-xs font-medium text-slate-200/90 backdrop-blur-xl transition hover:bg-white/10 hover:text-white"
                   >
                     <CheckCircle className="h-4 w-4 text-primary" />
@@ -570,10 +569,10 @@ export function PomodoroTimer() {
                 compact={isCompact}
               />
 
-              {isRunning && !isOvertime && (
+              {isRunning && (
                 <button
                   type="button"
-                  onClick={handleCompleteCycle}
+                  onClick={() => isOvertime ? handleOverfocusDecision(true) : handleCompleteCycle()}
                   className="flex min-h-[44px] items-center gap-2 rounded-full border border-white/10 bg-slate-900/30 px-4 py-2 text-xs font-medium text-slate-200/90 backdrop-blur-xl transition hover:bg-white/10 hover:text-white"
                 >
                   <CheckCircle className="h-4 w-4 text-primary" />
@@ -646,9 +645,7 @@ export function PomodoroTimer() {
         showRatingPopup={showRatingPopup}
         onRatingSubmit={handleRatingSubmit}
         onRatingSkip={handleRatingSkip}
-        showOverfocusPopup={showOverfocusPopup}
         extraTime={extraTime}
-        onOverfocusDecision={handleOverfocusDecision}
         showMissionsPopup={showMissionsPopup}
         onCloseMissions={() => setShowMissionsPopup(false)}
         showPip={showPip}
@@ -667,6 +664,7 @@ export function PomodoroTimer() {
           albumArt: currentTrack.albumArt,
         } : null}
       />
+      <PrimaryNavigation />
     </div>
   );
 }

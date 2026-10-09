@@ -2,7 +2,6 @@ import React from "react";
 import { Phase } from "@/lib/database";
 import { PhasePopup } from "../PhasePopup";
 import { RatingPopup } from "../RatingPopup";
-import { OverfocusPopup } from "../OverfocusPopup";
 import { MissionsPopup } from "../MissionsPopup";
 import { DocumentPictureInPicture } from "../DocumentPictureInPicture";
 import { PictureInPicture } from "../PictureInPicture";
@@ -17,9 +16,7 @@ interface TimerModalsProps {
   onRatingSubmit: (rating: number) => void;
   onRatingSkip: () => void;
 
-  showOverfocusPopup: boolean;
   extraTime: number;
-  onOverfocusDecision: (include: boolean) => void;
 
   showMissionsPopup: boolean;
   onCloseMissions: () => void;
@@ -49,9 +46,7 @@ export function TimerModals({
   showRatingPopup,
   onRatingSubmit,
   onRatingSkip,
-  showOverfocusPopup,
   extraTime,
-  onOverfocusDecision,
   showMissionsPopup,
   onCloseMissions,
   showPip,
@@ -79,13 +74,6 @@ export function TimerModals({
         isOpen={showRatingPopup}
         onSubmit={onRatingSubmit}
         onSkip={onRatingSkip}
-      />
-
-      <OverfocusPopup
-        isOpen={showOverfocusPopup}
-        extraTimeSeconds={extraTime}
-        onInclude={() => onOverfocusDecision(true)}
-        onDiscard={() => onOverfocusDecision(false)}
       />
 
       <MissionsPopup

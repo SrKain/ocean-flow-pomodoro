@@ -103,6 +103,9 @@ Concluído com sucesso (build validado sem erros).
 
 ---
 
+
+---
+
 ## STORY-0003 — Execução da Etapa E1 (Breakpoints Centralizados, Shell Compartilhado e Tokens de Fase)
 
 Data: 2026-10-09
@@ -196,5 +199,55 @@ Funcionalidades afetadas:
 Resultado:
 Concluído com sucesso (build validado sem erros).
 
+---
 
+## STORY-0005 — Navegação, Overfocus, Durações Padrão e Persistência Spotify
 
+Data: 2026-10-09
+
+Solicitado por:
+Usuário
+
+Executado por:
+OpenAI Codex
+
+Plataforma:
+Codex Desktop
+
+Modelo:
+GPT-6
+
+Resumo:
+Reorganização dos destinos principais em Foco, Análises e Ajustes, com barra inferior em viewports menores que 900 px e rail lateral em viewports maiores; manutenção do acesso ao Resumo do Dia dentro do Dashboard. O overfocus agora mantém o timer visível e oferece a ação "Concluir fase" diretamente na tela, registrando o tempo extra sem abrir modal. Os padrões de duração foram alinhados em Imersão 5 min, Mergulho 30 min e Respiração 10 min. Configurações ainda iguais aos padrões legados são migradas, assim como uma sessão inicial de Imersão parada; configurações personalizadas e sessões iniciadas são preservadas. A conexão Spotify agora usa cópia local por usuário como contingência ao Supabase, compartilha renovações concorrentes e mantém tokens durante falhas transitórias.
+
+Arquivos criados/alterados:
+- `BACKLOGGER.md` (registro de BL-020 e atualização dos históricos de BL-015, BL-017 e BL-019)
+- `CERME.md` (padrões de duração, overfocus, navegação e persistência Spotify atualizados)
+- `STORY.md` (criação deste registro STORY-0005)
+- `src/components/layout/PrimaryNavigation.tsx` (criado: navegação responsiva em três destinos)
+- `src/components/layout/AppShell.tsx` (montagem da navegação nas páginas secundárias)
+- `src/components/timer/TimerHeader.tsx` (cabeçalho reduzido a utilitários PiP e saída)
+- `src/components/timer/TimerModals.tsx` (remoção do popup de overfocus do fluxo)
+- `src/components/PomodoroTimer.tsx` (ação de concluir no overtime e acomodação da navegação)
+- `src/components/NowPlaying.tsx` (texto para sessão salva sem faixa em reprodução)
+- `src/hooks/useSpotify.tsx` (fallback local por usuário, renovação concorrente e resiliente)
+- `src/hooks/useSessionSync.ts` (migração da sessão inicial parada e padrões coerentes)
+- `src/lib/database.ts` (padrões 5/30/10 e migração de configurações remotas legadas)
+- `src/lib/storage.ts` (padrões 5/30/10 e migração local de configurações antigas)
+- `src/pages/Settings.tsx` (valores de fallback alinhados aos novos padrões)
+- `src/pages/Dashboard.tsx` (atalho para o Resumo do Dia)
+- `src/pages/Auth.tsx` (navegação principal ocultada na tela de autenticação)
+
+Funcionalidades afetadas:
+- MEC-001 / MEC-023: padrões de ciclo unificados em 5/30/10 minutos e migração de padrões legados conhecidos.
+- MEC-004: conclusão de overfocus na própria tela, com registro do tempo adicional.
+- MEC-006: navegação principal responsiva global.
+- MEC-016 / MEC-017: restauração persistente da conexão Spotify e estado sem faixa mais claro.
+- MEC-019 / MEC-022: Dashboard e Resumo agrupados sob o destino Análises, mantendo atalho para o resumo.
+
+Resultado:
+Implementado. O build não pôde ser executado: `npm` não está disponível no ambiente e o repositório não possui `node_modules` instalado.
+
+Observações:
+- O fallback local de tokens Spotify é separado por usuário e removido em desconexão explícita ou resposta `invalid_grant`.
+- A validação visual em navegador e a compilação permanecem pendentes por indisponibilidade do gerenciador de pacotes/dependências neste ambiente.

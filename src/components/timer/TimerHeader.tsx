@@ -1,14 +1,11 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { Settings, BarChart3, LogOut, Calendar, Minimize2 } from "lucide-react";
+import { LogOut, Minimize2 } from 'lucide-react';
 
 interface TimerHeaderProps {
   onOpenPip: () => void;
   onLogout: () => void;
-  compact?: boolean;
 }
 
-export function TimerHeader({ onOpenPip, onLogout, compact = false }: TimerHeaderProps) {
+export function TimerHeader({ onOpenPip, onLogout }: TimerHeaderProps) {
   return (
     <header className="flex w-full items-center justify-between gap-3 py-1">
       <div className="glass flex items-center gap-2 rounded-full border border-white/10 px-3.5 py-1.5">
@@ -17,31 +14,7 @@ export function TimerHeader({ onOpenPip, onLogout, compact = false }: TimerHeade
         </span>
       </div>
 
-      <nav className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-white/10 bg-slate-900/30 p-1 backdrop-blur-xl">
-        <Link
-          to="/summary"
-          className="flex h-11 w-11 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/10 hover:text-white"
-          aria-label="Resumo do Dia"
-          title="Resumo do Dia"
-        >
-          <Calendar className="h-4 w-4" />
-        </Link>
-        <Link
-          to="/dashboard"
-          className="flex h-11 w-11 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/10 hover:text-white"
-          aria-label="Dashboard"
-          title="Dashboard"
-        >
-          <BarChart3 className="h-4 w-4" />
-        </Link>
-        <Link
-          to="/settings"
-          className="flex h-11 w-11 items-center justify-center rounded-full text-slate-200/80 transition hover:bg-white/10 hover:text-white"
-          aria-label="Configurações"
-          title="Configurações"
-        >
-          <Settings className="h-4 w-4" />
-        </Link>
+      <div className="flex items-center gap-1 rounded-full border border-white/10 bg-slate-900/30 p-1 backdrop-blur-xl">
         <button
           type="button"
           onClick={onOpenPip}
@@ -60,7 +33,7 @@ export function TimerHeader({ onOpenPip, onLogout, compact = false }: TimerHeade
         >
           <LogOut className="h-4 w-4" />
         </button>
-      </nav>
+      </div>
     </header>
   );
 }

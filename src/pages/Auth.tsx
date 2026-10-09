@@ -131,14 +131,14 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <AppShell className="flex items-center justify-center">
+      <AppShell showNavigation={false} className="flex items-center justify-center">
         <div className="text-foreground">Carregando...</div>
       </AppShell>
     );
   }
 
   return (
-    <AppShell className="flex flex-col items-center justify-center py-8" maxWidth="sm">
+    <AppShell showNavigation={false} className="flex flex-col items-center justify-center py-8" maxWidth="sm">
       <div className="w-full">
         {/* Logo */}
         <div className="text-center mb-8">

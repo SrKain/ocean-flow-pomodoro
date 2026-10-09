@@ -52,6 +52,30 @@ function normalizeSession(session: ActiveSession): ActiveSession {
   };
 }
 
+function migrateLegacyIdleSession(session: ActiveSession, settings: PomodoroSettings): ActiveSession {
+  const legacyDurations = [25 * 60, 5 * 60];
+  const isInitialIdleImmersion = session.current_phase === 'immersion' &&
+    session.timer_status === 'idle' &&
+    session.cycle_count === 0 &&
+    !session.started_at &&
+    session.time_left === session.total_time &&
+    legacyDurations.includes(session.total_time);
+
+  if (!isInitialIdleImmersion) return session;
+
+  const duration = settings.immersionMinutes * 60;
+  if (session.total_time === duration) return session;
+
+  return {
+    ...session,
+    time_left: duration,
+    total_time: duration,
+    remaining_when_paused: duration,
+    end_at: null,
+    paused_at: null,
+  };
+}
+
 export function useSessionSync() {
   const { user } = useAuth();
   const [session, setSession] = useState<ActiveSession | null>(null);
@@ -66,7 +90,7 @@ export function useSessionSync() {
   }, []);
 
   const createDefaultSession = useCallback((): ActiveSession => {
-    const defaultTimeSeconds = (settings?.immersionMinutes || 25) * 60;
+    const defaultTimeSeconds = (settings?.immersionMinutes || 5) * 60;
     return {
       id: 'local-session',
       user_id: user?.id || 'guest',
@@ -91,7 +115,12 @@ export function useSessionSync() {
     const saved = localStorage.getItem('ocean_flow_active_session');
     if (saved) {
       try {
-        return normalizeSession(JSON.parse(saved) as ActiveSession);
+        const normalized = normalizeSession(JSON.parse(saved) as ActiveSession);
+        const migrated = settings ? migrateLegacyIdleSession(normalized, settings) : normalized;
+        if (migrated !== normalized) {
+          localStorage.setItem('ocean_flow_active_session', JSON.stringify(migrated));
+        }
+        return migrated;
       } catch {
         // ignore parse error
       }
@@ -125,10 +154,22 @@ export function useSessionSync() {
         if (error) throw error;
 
         if (data) {
-          setSession(normalizeSession(data as unknown as ActiveSession));
+          const normalized = normalizeSession(data as unknown as ActiveSession);
+          const migrated = settings ? migrateLegacyIdleSession(normalized, settings) : normalized;
+          setSession(migrated);
+          if (migrated !== normalized) {
+            await supabase.from('active_sessions').update({
+              time_left: migrated.time_left,
+              total_time: migrated.total_time,
+              remaining_when_paused: migrated.remaining_when_paused,
+              end_at: null,
+              paused_at: null,
+              updated_at: new Date().toISOString(),
+            }).eq('user_id', user.id);
+          }
         } else {
           // Create new session
-          const defaultTimeSeconds = (settings?.immersionMinutes || 25) * 60;
+          const defaultTimeSeconds = (settings?.immersionMinutes || 5) * 60;
           const { data: created, error: createError } = await supabase
             .from('active_sessions')
             .insert({

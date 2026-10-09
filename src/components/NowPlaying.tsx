@@ -40,7 +40,7 @@ export function NowPlaying({ compact = false }: NowPlayingProps) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm text-muted-foreground">Nada tocando</p>
-          <p className="text-[11px] text-muted-foreground/80">Conecte sua conta Spotify</p>
+          <p className="text-[11px] text-muted-foreground/80">Sessão salva. Inicie uma faixa no Spotify.</p>
         </div>
         <Button
           variant="ghost"

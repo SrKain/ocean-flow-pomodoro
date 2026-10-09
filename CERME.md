@@ -53,9 +53,11 @@ Comandos de início, pausa, reset ou avanço de fase acionados pelo usuário; du
 Contagem decrescente em segundos, alteração de estado da sessão, gatilho de transição de fase e persistência dos registros de ciclo (`cycle_records`).
 
 ### Regras
-- Duração padrão de Imersão: 25 minutos.
-- Duração padrão de Mergulho: 25 minutos.
-- Duração padrão de Respiração: 5 minutos.
+- Duração padrão de Imersão: 5 minutos.
+- Duração padrão de Mergulho: 30 minutos.
+- Duração padrão de Respiração: 10 minutos.
+- Configurações persistidas que correspondam aos padrões antigos do sistema são migradas para os novos padrões; valores diferentes são preservados.
+- Uma sessão inicial de Imersão parada, ainda sem ciclos, também recebe a duração atual configurada. Sessões em andamento ou já iniciadas são preservadas.
 - Ciclo completado (`completed: true`) é registrado após conclusão de cada fase, sendo que um ciclo completo é contabilizado ao fechar a fase de respiração.
 - Não permite valores de minutos menores que 1 minuto nas configurações.
 
@@ -79,6 +81,7 @@ Rota principal `/`, componente `PomodoroTimer.tsx`.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Padrões atualizados para 5/30/10 minutos e migração conservadora de valores antigos (STORY-0005).
 
 ---
 
@@ -178,7 +181,7 @@ Ativa
 Permitir que o usuário continue focado sem interrupção abrupta quando atingir o final da fase de Mergulho, contabilizando tempo extra de foco.
 
 ### Comportamento
-Quando a contagem atinge `00:00` na fase de Mergulho, em vez de interromper o trabalho imediatamente com alarmes forçados, o timer pode entrar em modo `Overtime`. O cronômetro passa a contar para cima (`+00:01`, `+00:02`...) acumulando `extra_time_seconds`. Um alerta/popup `OverfocusPopup` pode ser acionado para perguntar se deseja finalizar ou continuar o mergulho estendido.
+Quando a contagem atinge `00:00` na fase de Mergulho, o timer entra em modo `Overtime`. O cronômetro passa a contar para cima (`+00:01`, `+00:02`...) acumulando `extra_time_seconds`. O timer permanece visível e oferece o botão **Concluir fase**, que encerra o overtime e registra o tempo extra sem abrir um popup cobrindo a tela.
 
 ### Entrada
 Esgotamento do tempo regular da fase de mergulho.
@@ -188,26 +191,27 @@ Sinalizador `is_overtime: true`, contagem de tempo extra acumulado e persistênc
 
 ### Regras
 - O tempo extra é somado ao total de tempo focado nos relatórios.
-- Se o usuário decidir encerrar, o ciclo é gravado incluindo a duração regular + tempo extra.
+- Ao concluir pelo controle na tela, o ciclo é gravado incluindo a duração regular + tempo extra e a transição de fase segue o fluxo existente.
 
 ### Estados
 - Desativado (tempo regular)
 - Ativado (contagem progressiva em vermelho/coral glow)
-- Exibindo popup de confirmação
+- Overfocus visível no timer com ação de conclusão
 
 ### Interface
-Overlay e modal `OverfocusPopup.tsx` sobre a tela principal.
+Tela principal do timer (`PomodoroTimer.tsx`) e controle de conclusão da fase.
 
 ### Dependências
-`useSessionSync.ts`, `PomodoroTimer.tsx`, `OverfocusPopup.tsx`.
+`useSessionSync.ts`, `PomodoroTimer.tsx`, `TimerModals.tsx`.
 
 ### Arquivos relacionados
-- `src/components/OverfocusPopup.tsx`
 - `src/hooks/useSessionSync.ts`
 - `src/components/PomodoroTimer.tsx`
+- `src/components/timer/TimerModals.tsx`
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Popup de overfocus removido do fluxo; botão de conclusão permanece na tela durante o overtime (STORY-0005).
 
 ---
 
@@ -265,6 +269,7 @@ Otimizar a visualização do timer para suportar celulares e tablets em orienta�
 
 ### Comportamento
 A orientação e as faixas de viewport são detectadas dinamicamente via hook centralizado `useBreakpoint` (ao qual `useLandscapeMode` se conecta). O layout adapta-se de forma fluida: apresentação em duas colunas em desktop ou modo paisagem (coluna esquerda com anel polar, tempo e controles; coluna direita com painel de contexto de tags, notas e missões); e apresentação compacta de coluna única sem scroll vertical em modo retrato com acionamento do painel de contexto via gaveta/sheet inferior. Não há botão manual de tela cheia/fullscreen no código.
+Uma navegação global apresenta três destinos — Foco, Análises e Ajustes — em barra inferior abaixo de 900 px e rail lateral a partir de 900 px. A rota `/summary` permanece acessível por um atalho dentro do Dashboard e marca Análises como destino ativo.
 
 ### Entrada
 Giro físico do dispositivo móvel ou redimensionamento da janela do navegador (detecção automática por listeners de resize e orientationchange).
@@ -295,6 +300,7 @@ Ajuste responsivo unificado de `PomodoroTimer.tsx`.
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
 - Corrigido na etapa E2 (STORY-0004): remoção da menção a botão manual de fullscreen e documentação da composição modular responsiva com duas colunas e sheet.
+- Navegação principal responsiva em três destinos registrada; resumo diário acessível a partir do Dashboard (STORY-0005).
 
 ---
 
@@ -668,7 +674,7 @@ Ativa
 Conectar a conta Spotify do usuário via fluxo seguro PKCE para rastrear as músicas ouvidas durante os blocos de foco.
 
 ### Comportamento
-O hook `useSpotify` implementa autenticação OAuth 2.0 com PKCE (Proof Key for Code Exchange) sem expor segredos de cliente. Gera code verifier e challenge via SubtleCrypto. Persiste os tokens em `spotify_connections` no Supabase. Realiza polling periódico do endpoint `/v1/me/player/currently-playing` para obter faixa, artista, álbum e capa.
+O hook `useSpotify` implementa autenticação OAuth 2.0 com PKCE (Proof Key for Code Exchange) sem expor segredos de cliente. Gera code verifier e challenge via SubtleCrypto. Persiste os tokens em `spotify_connections` no Supabase e mantém uma cópia local por usuário para recuperação. Realiza polling periódico do endpoint `/v1/me/player/currently-playing` para obter faixa, artista, álbum e capa.
 
 ### Entrada
 Ação de conexão com Spotify, autorização no consent do Spotify e retorno com `code`.
@@ -679,6 +685,8 @@ Tokens de acesso gravados e objeto `currentTrack` mantido no contexto da aplica�
 ### Regras
 - Escopos solicitados: `user-read-currently-playing`, `user-read-playback-state`.
 - Renovação automática de access token via refresh token antes do vencimento.
+- Renovações simultâneas compartilham a mesma solicitação; falhas temporárias mantêm os tokens salvos para nova tentativa.
+- Ao desconectar explicitamente ou receber `invalid_grant`, as credenciais locais e remotas são removidas.
 - Permite desconectar a qualquer momento.
 
 ### Estados
@@ -699,6 +707,7 @@ Botão de conexão no `NowPlaying.tsx` e `Settings.tsx`.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Persistência local de contingência e renovação resiliente de token adicionadas (STORY-0005).
 
 ---
 
@@ -949,6 +958,7 @@ Permitir a personalização dos tempos das três fases do Pomodoro e fornecer ga
 ### Comportamento
 Página `/settings`:
 - Sliders/inputs numéricos para definir minutos de Imersão, Mergulho e Respiração.
+- Padrões iniciais de 5 minutos para Imersão, 30 para Mergulho e 10 para Respiração.
 - Salva na tabela `pomodoro_settings` com fallback local.
 - Botão "Enviar resumo diário por email" que aciona a Supabase Edge Function `daily-email-summary` enviando os dados de produtividade do dia via SMTP.
 
@@ -979,6 +989,7 @@ Rota `/settings`, componente `Settings.tsx`.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Padrões e migração de configurações antigas alinhados em 5/30/10 minutos (STORY-0005).
 
 ---
 

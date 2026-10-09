@@ -38,9 +38,9 @@ export interface TagStats {
 const STORAGE_KEY = 'pomodoro-ocean';
 
 const defaultSettings: PomodoroSettings = {
-  immersionMinutes: 25,
-  diveMinutes: 5,
-  breathMinutes: 5,
+  immersionMinutes: 5,
+  diveMinutes: 30,
+  breathMinutes: 10,
   autoAdvance: false,
 };
 
@@ -49,7 +49,25 @@ export function getSettings(): PomodoroSettings {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const state: PomodoroState = JSON.parse(stored);
-      return { ...defaultSettings, ...state.settings, autoAdvance: state.settings?.autoAdvance ?? false };
+      const settings = { ...defaultSettings, ...state.settings, autoAdvance: state.settings?.autoAdvance ?? false };
+      const oldDefaults = [
+        [25, 25, 5],
+        [25, 5, 5],
+      ];
+      const hasOldDefaults = oldDefaults.some(([immersion, dive, breath]) =>
+        settings.immersionMinutes === immersion &&
+        settings.diveMinutes === dive &&
+        settings.breathMinutes === breath
+      );
+
+      if (hasOldDefaults) {
+        const migrated = { ...defaultSettings, autoAdvance: settings.autoAdvance };
+        state.settings = migrated;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        return migrated;
+      }
+
+      return settings;
     }
   } catch (e) {
     console.error('Error reading settings:', e);

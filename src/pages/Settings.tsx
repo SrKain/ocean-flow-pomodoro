@@ -91,7 +91,7 @@ export default function Settings() {
                   value={settings.immersionMinutes}
                   onChange={(e) => setSettings(prev => prev ? ({
                     ...prev,
-                    immersionMinutes: parseInt(e.target.value) || 25
+                    immersionMinutes: parseInt(e.target.value) || 5
                   }) : prev)}
                   className="flex-1 bg-white/5 border-white/10"
                 />
@@ -115,7 +115,7 @@ export default function Settings() {
                   value={settings.diveMinutes}
                   onChange={(e) => setSettings(prev => prev ? ({
                     ...prev,
-                    diveMinutes: parseInt(e.target.value) || 5
+                    diveMinutes: parseInt(e.target.value) || 30
                   }) : prev)}
                   className="flex-1 bg-white/5 border-white/10"
                 />
@@ -139,7 +139,7 @@ export default function Settings() {
                   value={settings.breathMinutes}
                   onChange={(e) => setSettings(prev => prev ? ({
                     ...prev,
-                    breathMinutes: parseInt(e.target.value) || 5
+                    breathMinutes: parseInt(e.target.value) || 10
                   }) : prev)}
                   className="flex-1 bg-white/5 border-white/10"
                 />
