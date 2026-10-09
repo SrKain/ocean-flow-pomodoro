@@ -23,6 +23,7 @@ export function PolarRing({
 
   return (
     <svg
+      viewBox={`0 0 ${size} ${size}`}
       width={size}
       height={size}
       className={cn("polar-ring -rotate-90", className)}

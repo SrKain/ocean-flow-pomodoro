@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Play, Pause, SkipForward, Music } from 'lucide-react';
 import { Phase } from '@/lib/database';
 import { createRoot, Root } from 'react-dom/client';
+import {
+  PHASE_NAMES as phaseNames,
+  PHASE_COLORS as phaseColors,
+  getPhaseDynamicColors as getPhaseColors,
+} from '@/lib/phaseTokens';
 
 interface SpotifyTrackInfo {
   name: string;
@@ -22,53 +27,6 @@ interface DocumentPictureInPictureProps {
   onSkip?: () => void;
   currentTrack?: SpotifyTrackInfo | null;
 }
-
-const phaseNames: Record<Phase, string> = {
-  immersion: 'Imersão',
-  dive: 'Mergulho',
-  breath: 'Respiração',
-};
-
-const phaseColors: Record<Phase, string> = {
-  immersion: 'hsl(195, 85%, 70%)',
-  dive: 'hsl(200, 80%, 65%)',
-  breath: 'hsl(25, 90%, 65%)',
-};
-
-// Easing function for smoother color transitions
-const easeInOutCubic = (t: number): number => {
-  return t < 0.5 
-    ? 4 * t * t * t 
-    : 1 - Math.pow(-2 * t + 2, 3) / 2;
-};
-
-// Calculate dynamic colors based on phase and progress
-const getPhaseColors = (phase: Phase, progress: number) => {
-  const easedProgress = easeInOutCubic(progress);
-  
-  if (phase === 'dive') {
-    const hue = 215 - easedProgress * 190;
-    const sat = 50 - easedProgress * 5;
-    const light = 8 + easedProgress * 7;
-    return { hue, sat, light };
-  }
-  
-  if (phase === 'breath') {
-    const hue = 25 + easedProgress * 175;
-    const sat = 45 + easedProgress * 5;
-    const light = 15 - easedProgress * 3;
-    return { hue, sat, light };
-  }
-  
-  if (phase === 'immersion') {
-    const hue = 200 + easedProgress * 15;
-    const sat = 50;
-    const light = 12 - easedProgress * 4;
-    return { hue, sat, light };
-  }
-  
-  return { hue: 215, sat: 50, light: 8 };
-};
 
 const getBackgroundGradient = (phase: Phase, progress: number, isOvertime: boolean) => {
   if (isOvertime) {

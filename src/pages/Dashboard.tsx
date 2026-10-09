@@ -25,6 +25,7 @@ import { BreathAnalytics } from "@/components/BreathAnalytics";
 import { GroupAnalytics } from "@/components/GroupAnalytics";
 import { TagManagement } from "@/components/TagManagement";
 import { AIInsightsCard } from "@/components/AIInsightsCard";
+import { AppShell } from "@/components/layout/AppShell";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -42,18 +43,10 @@ import {
   CartesianGrid,
   Legend
 } from "recharts";
-
-const phaseNames: Record<string, string> = {
-  immersion: 'Imersão',
-  dive: 'Mergulho',
-  breath: 'Respiração',
-};
-
-const phaseColors: Record<string, string> = {
-  immersion: 'hsl(195, 85%, 65%)',
-  dive: 'hsl(200, 80%, 55%)',
-  breath: 'hsl(25, 90%, 60%)',
-};
+import {
+  PHASE_NAMES as phaseNames,
+  PHASE_COLORS as phaseColors,
+} from "@/lib/phaseTokens";
 
 const chartColors = [
   'hsl(200, 80%, 55%)',
@@ -181,15 +174,15 @@ const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <AppShell className="flex items-center justify-center">
         <div className="text-foreground">Carregando...</div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="relative min-h-screen p-4 sm:p-8 z-10">
+    <AppShell maxWidth="1440" className="py-6">
+      <div className="relative w-full z-10">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Link
@@ -274,19 +267,19 @@ const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
               <TrendingUp className="w-5 h-5 text-primary" />
               Evolução Diária
             </h2>
-            <div className="glass-card" style={{ height: 200 }}>
+            <div className="glass-card w-full aspect-[2/1] min-h-[200px] max-h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={lineData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsla(0,0%,100%,0.1)" />
                   <XAxis 
                     dataKey="date" 
                     stroke="hsl(200, 15%, 60%)" 
-                    fontSize={10}
+                    fontSize={12}
                     tickLine={false}
                   />
                   <YAxis 
                     stroke="hsl(200, 15%, 60%)" 
-                    fontSize={10}
+                    fontSize={12}
                     tickLine={false}
                     axisLine={false}
                   />
@@ -395,16 +388,16 @@ const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
           ) : (
             <>
               {/* Chart */}
-              <div className="glass-card mb-4" style={{ height: 220 }}>
+              <div className="glass-card mb-4 w-full aspect-[16/10] min-h-[220px] max-h-[360px]">
                 <ResponsiveContainer width="100%" height="100%">
                   {chartType === 'bar' ? (
                     <BarChart data={tagStats} layout="vertical">
-                      <XAxis type="number" stroke="hsl(200, 15%, 60%)" fontSize={10} />
+                      <XAxis type="number" stroke="hsl(200, 15%, 60%)" fontSize={12} />
                       <YAxis 
                         type="category" 
                         dataKey="tag" 
                         stroke="hsl(200, 15%, 60%)" 
-                        fontSize={10}
+                        fontSize={12}
                         width={80}
                         tickLine={false}
                       />
@@ -454,9 +447,9 @@ const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
                       <XAxis 
                         dataKey="date" 
                         stroke="hsl(200, 15%, 60%)" 
-                        fontSize={10}
+                        fontSize={12}
                       />
-                      <YAxis stroke="hsl(200, 15%, 60%)" fontSize={10} />
+                      <YAxis stroke="hsl(200, 15%, 60%)" fontSize={12} />
                       <Tooltip 
                         contentStyle={{ 
                           background: 'hsla(210, 40%, 15%, 0.95)', 
@@ -554,6 +547,6 @@ const [breathStats, setBreathStats] = useState<BreathTagStats[]>([]);
           )}
         </section>
       </div>
-    </div>
+    </AppShell>
   );
 }

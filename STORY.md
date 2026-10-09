@@ -55,3 +55,146 @@ Concluído
 Observações:
 - Todos os problemas e oportunidades de melhoria identificados durante a auditoria foram registrados no `BACKLOGGER.md` na seção de sugestões não aprovadas, respeitando estritamente a instrução de não implementar redesigns ou alterações prematuras nesta etapa.
 - Estabelecido o fluxo obrigatório em 4 etapas para qualquer intervenção futura: Leitura → Planejamento → Aprovação Expressa → Execução.
+
+---
+
+## STORY-0002 — Execução da Etapa E0 (Fundações de Layout, Viewport, Botões e Estilos)
+
+Data: 2026-10-09
+
+Solicitado por:
+Usuário (Reforma de UI/UX)
+
+Executado por:
+Google AI Studio
+
+Plataforma:
+Google AI Studio
+
+Modelo:
+Gemini 3.7 Flash
+
+Resumo:
+Implementação completa da etapa E0 (BL-012) da reforma de UI/UX: liberação de rolagem vertical nas páginas secundárias (Dashboard, Resumo, Configurações, Auth) através da remoção do `overflow: hidden` global e alinhamento de `#root` com `width: 100%`, preservando o travamento `overflow: hidden` apenas na tela de foco (`.focus-shell`); remoção das restrições de zoom (`user-scalable=no`, `maximum-scale=1`) no viewport do web (D4); unificação do tratamento de safe area insets no nível do body/shell removendo duplicações internas no container de PomodoroTimer; padronização de variantes do componente `Button` (primary, secondary, destructive, ghost, etc.) com alvos de toque adequados (h-11 = 44px) e substituição das classes órfãs `ios-button-*` em `Auth.tsx` e `PhasePopup.tsx`; substituição dos inputs e botões crus em `Settings.tsx` pelos componentes do design system (`Input` e `Button`); declaração do keyframe e da animação `scale-in` no `tailwind.config.ts`; atualização das alturas máximas de `MissionsPopup` e `TagManagement` para unidades dinâmicas (`dvh`); e exclusão definitiva do arquivo residual e não importado `src/App.css`.
+
+Arquivos criados/alterados:
+- `BACKLOGGER.md` (registro de BL-011 a BL-019 e conclusão de BL-012)
+- `STORY.md` (criação deste registro STORY-0002)
+- `index.html` (remoção de user-scalable=no, maximum-scale=1 e overflow:hidden global)
+- `src/index.css` (ajuste de #root e focus-shell para width: 100% e body com overflow-x: hidden)
+- `src/components/PomodoroTimer.tsx` (remoção de padding safe-area duplicado no container)
+- `src/components/ui/button.tsx` (adição da variante primary e calibragem de dimensões h-11 >= 44px)
+- `src/pages/Auth.tsx` (substituição de ios-button-* por Button variant="primary" e "secondary")
+- `src/components/PhasePopup.tsx` (substituição de botões crus por Button variant="secondary" e "primary")
+- `src/pages/Settings.tsx` (substituição de inputs e botões crus por Input e Button)
+- `tailwind.config.ts` (declaração de keyframe/animation scale-in e import ESM de tailwindcss-animate)
+- `src/components/MissionsPopup.tsx` (ajuste de max-h para 85dvh)
+- `src/components/TagManagement.tsx` (ajuste de max-h para 80dvh)
+- `src/App.css` (removido por obsolescência e ausência de importação)
+
+Funcionalidades afetadas:
+- MEC-001 (Timer Pomodoro): container limpo sem padding redundante.
+- MEC-005 / MEC-006: fundação de viewport responsiva sem restrições de zoom artificiais.
+- MEC-023 (Configurações): formulário modernizado com componentes shadcn Input e Button.
+- MEC-024 (Autenticação): tela acessível e botões padronizados no sistema de design.
+
+Resultado:
+Concluído com sucesso (build validado sem erros).
+
+---
+
+## STORY-0003 — Execução da Etapa E1 (Breakpoints Centralizados, Shell Compartilhado e Tokens de Fase)
+
+Data: 2026-10-09
+
+Solicitado por:
+Usuário (Reforma de UI/UX)
+
+Executado por:
+Google AI Studio
+
+Plataforma:
+Google AI Studio
+
+Modelo:
+Gemini 3.7 Flash
+
+Resumo:
+Implementação completa da etapa E1 (BL-013) da reforma de UI/UX: criação do hook e contexto unificado `useBreakpoint` (`src/hooks/useBreakpoint.tsx`) com 6 faixas granulares de viewport (compacta <360px ou altura <560px, celular 360-599px, tablet retrato 600-899px, desktop compacto 900-1199px, desktop 1200-1599px e ampla >=1600px), suporte à regra de altura (paisagem baixa com altura <=520px) e flag `isBottomNav` para suportar a decisão D2 (tablet retrato de 600 a 899px usando barra inferior como celular); conexão dos hooks legados `useIsMobile` e `useLandscapeMode` a essa fonte centralizada sem quebrar contratos de chamada; criação do módulo de tokens canônicos `src/lib/phaseTokens.ts` centralizando nomes, ordem, descrições, cores HSL e funções de easing/interpolação de fase (`getPhaseDynamicColors`, `getTimerTextColor`, `getRingGlowColor`), eliminando as duplicações espalhadas por `PomodoroTimer`, `DocumentPictureInPicture`, `PictureInPicture`, `PhasePopup` e `Dashboard`; criação do componente de layout `AppShell` (`src/components/layout/AppShell.tsx`) com container max-w-1440px centralizado, eliminação de overflow horizontal e fundo escuro oceânico compartilhado aplicado em `Auth.tsx`, `DailySummary.tsx`, `Settings.tsx`, `Dashboard.tsx` e `NotFound.tsx`; reconstrução da página `NotFound.tsx` totalmente em português, estilizada no tema do app e padronizada sob o nome "Ocean Flow"; e proporcionalização de todos os gráficos com `aspect-ratio` e rótulos de eixos calibrados para pelo menos 12 px em `Dashboard.tsx`, `DailySummary.tsx`, `MusicAnalytics.tsx`, `GroupAnalytics.tsx` e `RatingAnalytics.tsx`.
+
+Arquivos criados/alterados:
+- `BACKLOGGER.md` (conclusão de BL-013)
+- `STORY.md` (criação deste registro STORY-0003)
+- `src/hooks/useBreakpoint.tsx` (criado: hook e ViewportProvider centralizado com 6 faixas e regra de altura)
+- `src/hooks/use-mobile.tsx` (conectado à fonte do useBreakpoint)
+- `src/hooks/useLandscapeMode.tsx` (conectado à fonte do useBreakpoint)
+- `src/App.tsx` (montagem de ViewportProvider no topo da árvore React)
+- `src/lib/phaseTokens.ts` (criado: módulo central de tokens, ordem, cores e funções dinâmicas de fase)
+- `src/components/layout/AppShell.tsx` (criado: shell compartilhado max 1440px e fundo oceânico)
+- `src/components/PhasePopup.tsx` (migrado para tokens centralizados PHASE_NAMES e PHASE_DESCRIPTIONS)
+- `src/components/PomodoroTimer.tsx` (migrado para tokens centralizados e interpolação de cor unificada)
+- `src/components/DocumentPictureInPicture.tsx` (migrado para tokens centralizados)
+- `src/components/PictureInPicture.tsx` (migrado para tokens centralizados)
+- `src/pages/Dashboard.tsx` (migrado para tokens centralizados, AppShell, aspecto proporcional e rótulos >= 12px)
+- `src/pages/DailySummary.tsx` (migrado para AppShell, aspect-ratio nos gráficos e rótulos >= 12px)
+- `src/pages/Settings.tsx` (migrado para AppShell compartilhado)
+- `src/pages/Auth.tsx` (migrado para AppShell compartilhado com fundo escuro)
+- `src/pages/NotFound.tsx` (reconstruído com AppShell, em português e com identidade Ocean Flow)
+- `src/components/MusicAnalytics.tsx` (aspect-ratio proporcional e rótulos >= 12px)
+- `src/components/GroupAnalytics.tsx` (aspect-ratio proporcional e rótulos >= 12px)
+- `src/components/RatingAnalytics.tsx` (aspect-ratio proporcional e rótulos >= 12px)
+
+Funcionalidades afetadas:
+- MEC-001 / MEC-002: cores de fase consolidadas e sincronizadas com PiPs.
+- MEC-006: detecção de orientação e faixas responsivas unificadas no hook central.
+- MEC-019 / MEC-020 / MEC-021 / MEC-022: gráficos com aspecto visual proporcional e rótulos legíveis.
+- MEC-024: tela de autenticação alinhada ao fundo oceânico da aplicação.
+
+Resultado:
+Concluído com sucesso (build validado sem erros).
+
+---
+
+## STORY-0004 — Execução da Etapa E2 (Tela de Foco Unificada, Dimensionamento Polar e Composição Modular)
+
+Data: 2026-10-09
+
+Solicitado por:
+Usuário (Reforma de UI/UX)
+
+Executado por:
+Google AI Studio
+
+Plataforma:
+Google AI Studio
+
+Modelo:
+Gemini 3.7 Flash
+
+Resumo:
+Implementação completa da etapa E2 (BL-014) da reforma de UI/UX: unificação das duas árvores JSX divergentes de `PomodoroTimer.tsx` em uma única árvore JSX responsiva e limpa controlada por hooks e CSS; modularização da tela de foco com a extração de `TimerHeader.tsx` (navegação superior com alvos de toque >= 44px), `FocusContextPanel.tsx` (painel unificado de tags, Spotify e missões) e `TimerModals.tsx` (isolamento de diálogos Radix e PiPs); dimensionamento proporcional fluido do `PolarRing` calculado com `clamp` e proporções relativas à altura da viewport (`dvh`/`height`) e largura, eliminando transbordamentos em qualquer proporção ou orientação de tela; adição de `viewBox` no SVG do `PolarRing`; inclusão de `tabular-nums` e `select-none` no `TimerDisplay` para eliminar jitter e variações de largura dos algarismos na contagem decrescente e crescente; criação de layout de duas colunas para desktop (>= 900px) e modo paisagem, e layout compacto sem rolagem vertical para mobile retrato mantendo a tela de foco estritamente sem scroll; implementação de gaveta inferior (`Sheet` do Radix) no mobile retrato para acomodar o painel de contexto completo com acionamento por botão de toque >= 44px na barra inferior; persistência imediata e restauração local das seleções de tags (imersão, mergulho e respiração) e notas da sessão via `localStorage` prevenindo perda de contexto durante recargas ou transição de rotas; ajuste do botão de reset compacto em `ControlButtons.tsx` para garantir alvo de toque mínimo de 44px (`w-11 h-11`); e correção formal de MEC-006 no `CERME.md` para remover menção a botão inexistente de tela cheia/fullscreen e registrar a arquitetura responsiva real.
+
+Arquivos criados/alterados:
+- `BACKLOGGER.md` (conclusão de BL-014)
+- `STORY.md` (criação deste registro STORY-0004)
+- `CERME.md` (correção de MEC-006: remoção de menção a botão de tela cheia inexistente)
+- `src/components/timer/TimerHeader.tsx` (criado: navegação do timer modularizada com alvos de toque >= 44px)
+- `src/components/timer/FocusContextPanel.tsx` (criado: painel reutilizável de tags, notas, Spotify e missões)
+- `src/components/timer/TimerModals.tsx` (criado: container isolado para popups de fase, rating, overfocus, missões e PiP)
+- `src/components/PomodoroTimer.tsx` (unificação total da árvore JSX, remoção de árvores duplicadas, persistência de tags, integração do Sheet de contexto e dimensionamento fluido)
+- `src/components/TimerDisplay.tsx` (adição de tabular-nums e dimensões fluidas)
+- `src/components/PolarRing.tsx` (adição de viewBox e suporte a escalabilidade fluida)
+- `src/components/ControlButtons.tsx` (calibração de tamanho mínimo de 44px para botão de reset)
+
+Funcionalidades afetadas:
+- MEC-001 (Timer Pomodoro): árvore unificada sem duplicações, conservando rigorosamente a máquina de estados e temporização.
+- MEC-002 (Visualização Polar): anel adaptativo proporcional via clamp/dvh e dígitos com tipografia tabular sem jitter.
+- MEC-003 (Controles): alvos de toque calibrados para pelo menos 44px e botão de concluir fase acessível.
+- MEC-006 (Modo Paisagem e Responsividade): documentação corrigida e layout fluído de 2 colunas vs. coluna única com sheet.
+- MEC-009 / MEC-010 / MEC-011: tags e notas preservadas localmente durante a sessão.
+
+Resultado:
+Concluído com sucesso (build validado sem erros).
+
+
+

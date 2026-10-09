@@ -146,7 +146,7 @@ export function MissionsPopup({ isOpen, onClose }: MissionsPopupProps) {
       />
       
       {/* Popup */}
-      <div className="relative w-full max-w-md max-h-[85vh] flex flex-col glass-popup animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+      <div className="relative w-full max-w-md max-h-[85dvh] flex flex-col glass-popup animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         {/* Header */}
         <div className="flex items-center justify-between p-6 pb-4 border-b border-white/10">
           <div className="flex items-center gap-3">

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -29,15 +29,18 @@
       })(window, document, "clarity", "script", "uxc5s4cbw5");
     </script>
     <style>
-      /* Ensure full screen on mobile/Capacitor */
-      html, body, #root {
-        height: 100%;
+      /* Ensure full screen on mobile/Capacitor without blocking scroll */
+      html, body {
         width: 100%;
+        min-height: 100%;
         margin: 0;
         padding: 0;
-        overflow: hidden;
       }
-      /* Safe area insets for notches and rounded corners */
+      #root {
+        width: 100%;
+        min-height: 100dvh;
+      }
+      /* Safe area insets applied once at body level */
       body {
         padding-top: env(safe-area-inset-top);
         padding-bottom: env(safe-area-inset-bottom);

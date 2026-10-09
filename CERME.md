@@ -264,33 +264,37 @@ Ativa
 Otimizar a visualização do timer para suportar celulares e tablets em orientação horizontal (dock de mesa / modo descanso).
 
 ### Comportamento
-O hook `useLandscapeMode` detecta mudanças de orientação da tela (`orientationchange` / `window.matchMedia('(orientation: landscape)')`) e ajusta dinamicamente as classes de layout, ocultando distrações e expandindo o anel polar no centro da tela. Também permite alternar manualmente via botão de fullscreen.
+A orientação e as faixas de viewport são detectadas dinamicamente via hook centralizado `useBreakpoint` (ao qual `useLandscapeMode` se conecta). O layout adapta-se de forma fluida: apresentação em duas colunas em desktop ou modo paisagem (coluna esquerda com anel polar, tempo e controles; coluna direita com painel de contexto de tags, notas e missões); e apresentação compacta de coluna única sem scroll vertical em modo retrato com acionamento do painel de contexto via gaveta/sheet inferior. Não há botão manual de tela cheia/fullscreen no código.
 
 ### Entrada
-Giro físico do dispositivo móvel ou clique no botão de modo imersivo.
+Giro físico do dispositivo móvel ou redimensionamento da janela do navegador (detecção automática por listeners de resize e orientationchange).
 
 ### Saída
-Layout horizontal limpo com tipografia maximizada e anel polar central.
+Layout responsivo adaptativo com anel polar proporcional via clamp/dvh, tipografia tabular sem salto numérico e acomodação de contexto sem transbordamento de tela.
 
 ### Regras
-- Em dispositivos móveis em modo paisagem, elementos secundários (cabeçalhos pesados) são compactados ou ocultados.
+- Em dispositivos móveis e tablets em modo paisagem ou desktops, o contexto é exibido em coluna lateral integrada.
+- Em modo retrato móvel/compacto, a tela de foco preserva layout sem scroll com o painel de contexto acessível via sheet inferior.
 
 ### Estados
-- Retrato (Portrait)
-- Paisagem (Landscape)
+- Retrato (Portrait) com Sheet de Contexto
+- Paisagem / Desktop com Duas Colunas
 
 ### Interface
-Ajuste responsivo global de `PomodoroTimer.tsx`.
+Ajuste responsivo unificado de `PomodoroTimer.tsx`.
 
 ### Dependências
-`useLandscapeMode.tsx`.
+`useBreakpoint.tsx`, `useLandscapeMode.tsx`, `FocusContextPanel.tsx`, `TimerDisplay.tsx`, `PolarRing.tsx`.
 
 ### Arquivos relacionados
+- `src/hooks/useBreakpoint.tsx`
 - `src/hooks/useLandscapeMode.tsx`
 - `src/components/PomodoroTimer.tsx`
+- `src/components/timer/FocusContextPanel.tsx`
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Corrigido na etapa E2 (STORY-0004): remoção da menção a botão manual de fullscreen e documentação da composição modular responsiva com duas colunas e sheet.
 
 ---
 

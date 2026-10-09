@@ -102,15 +102,15 @@ export function MusicAnalytics({ stats, topTracks }: MusicAnalyticsProps) {
       {topArtists.length > 0 && (
         <div className="glass-card">
           <h4 className="text-sm font-medium text-foreground mb-3">Top Artistas</h4>
-          <div style={{ height: 200 }}>
+          <div className="w-full aspect-[2/1] min-h-[180px] max-h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} layout="vertical">
-                <XAxis type="number" stroke="hsl(200, 15%, 60%)" fontSize={10} />
+                <XAxis type="number" stroke="hsl(200, 15%, 60%)" fontSize={12} />
                 <YAxis 
                   type="category" 
                   dataKey="artist" 
                   stroke="hsl(200, 15%, 60%)" 
-                  fontSize={10}
+                  fontSize={12}
                   width={80}
                   tickLine={false}
                 />

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { getTotalFocusMinutesAsync, getTotalCompletedCyclesAsync, getTagStatsAsync } from '@/lib/database';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { AppShell } from '@/components/layout/AppShell';
 
 interface DailyStats {
   totalFocusMinutes: number;
@@ -105,8 +106,8 @@ const DailySummary = () => {
   const pieData = stats.tagStats.filter(t => t.totalTimeMinutes > 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5 p-4">
-      <div className="max-w-md mx-auto">
+    <AppShell maxWidth="md" className="py-6">
+      <div>
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Button
@@ -206,7 +207,7 @@ const DailySummary = () => {
                   <h3 className="font-medium text-foreground">Tempo por Tag</h3>
                 </div>
                 
-                <div className="h-48">
+                <div className="w-full aspect-[16/10] min-h-[200px] max-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -254,10 +255,10 @@ const DailySummary = () => {
             {pieData.length > 0 && (
               <Card className="p-4 bg-card/40 backdrop-blur-xl border-border/30">
                 <h3 className="font-medium text-foreground mb-4">Minutagem por Tag</h3>
-                <div className="h-48">
+                <div className="w-full aspect-[16/10] min-h-[200px] max-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={pieData} layout="vertical">
-                      <XAxis type="number" tickFormatter={(v) => `${v}min`} />
+                      <XAxis type="number" tickFormatter={(v) => `${v}min`} tick={{ fontSize: 12 }} />
                       <YAxis 
                         type="category" 
                         dataKey="tag" 
@@ -294,7 +295,7 @@ const DailySummary = () => {
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 };
 

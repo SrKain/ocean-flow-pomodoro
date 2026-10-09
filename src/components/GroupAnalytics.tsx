@@ -64,15 +64,15 @@ export function GroupAnalytics({ stats }: GroupAnalyticsProps) {
       </div>
 
       {/* Chart */}
-      <div className="glass-card" style={{ height: 200 }}>
+      <div className="glass-card w-full aspect-[2/1] min-h-[180px] max-h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} layout="vertical">
-            <XAxis type="number" stroke="hsl(200, 15%, 60%)" fontSize={10} />
+            <XAxis type="number" stroke="hsl(200, 15%, 60%)" fontSize={12} />
             <YAxis 
               type="category" 
               dataKey="name" 
               stroke="hsl(200, 15%, 60%)" 
-              fontSize={10}
+              fontSize={12}
               width={80}
               tickLine={false}
             />

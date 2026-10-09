@@ -4,6 +4,9 @@ import { ArrowLeft, Save, Send, Loader2 } from "lucide-react";
 import { getSettingsAsync, saveSettingsAsync, PomodoroSettings } from "@/lib/database";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { AppShell } from "@/components/layout/AppShell";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -50,15 +53,15 @@ export default function Settings() {
 
   if (loading || !settings) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <AppShell className="flex items-center justify-center">
         <div className="text-foreground">Carregando...</div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-lg mx-auto p-6">
+    <AppShell maxWidth="md" className="py-6">
+      <div>
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Link
@@ -81,7 +84,7 @@ export default function Settings() {
                 Imersão
               </span>
               <div className="flex items-center gap-3">
-                <input
+                <Input
                   type="number"
                   min="1"
                   max="120"
@@ -90,7 +93,7 @@ export default function Settings() {
                     ...prev,
                     immersionMinutes: parseInt(e.target.value) || 25
                   }) : prev)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="flex-1 bg-white/5 border-white/10"
                 />
                 <span className="text-muted-foreground">minutos</span>
               </div>
@@ -105,7 +108,7 @@ export default function Settings() {
                 Mergulho
               </span>
               <div className="flex items-center gap-3">
-                <input
+                <Input
                   type="number"
                   min="1"
                   max="60"
@@ -114,7 +117,7 @@ export default function Settings() {
                     ...prev,
                     diveMinutes: parseInt(e.target.value) || 5
                   }) : prev)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="flex-1 bg-white/5 border-white/10"
                 />
                 <span className="text-muted-foreground">minutos</span>
               </div>
@@ -129,7 +132,7 @@ export default function Settings() {
                 Respiração
               </span>
               <div className="flex items-center gap-3">
-                <input
+                <Input
                   type="number"
                   min="1"
                   max="60"
@@ -138,7 +141,7 @@ export default function Settings() {
                     ...prev,
                     breathMinutes: parseInt(e.target.value) || 5
                   }) : prev)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="flex-1 bg-white/5 border-white/10"
                 />
                 <span className="text-muted-foreground">minutos</span>
               </div>
@@ -180,10 +183,12 @@ export default function Settings() {
             <p className="text-sm text-muted-foreground mb-4">
               Envie agora o resumo diário de produtividade para o seu email.
             </p>
-            <button
+            <Button
+              type="button"
+              variant="secondary"
               onClick={handleSendDailyEmail}
               disabled={sendingEmail}
-              className="w-full py-3 rounded-xl bg-ocean-light/20 text-ocean-light font-medium flex items-center justify-center gap-2 transition-all hover:bg-ocean-light/30 disabled:opacity-50"
+              className="w-full"
             >
               {sendingEmail ? (
                 <>
@@ -196,19 +201,21 @@ export default function Settings() {
                   Enviar Resumo Agora
                 </>
               )}
-            </button>
+            </Button>
           </div>
 
           {/* Save Button */}
-          <button
+          <Button
+            type="button"
+            variant="primary"
             onClick={handleSave}
-            className="w-full py-4 rounded-xl bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:brightness-110 hover:shadow-lg hover:shadow-primary/30"
+            className="w-full text-base font-semibold"
           >
             <Save className="w-5 h-5" />
             Salvar Configurações
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

@@ -1,4 +1,6 @@
 import { Phase } from "@/lib/storage";
+import { Button } from "@/components/ui/button";
+import { PHASE_NAMES, PHASE_DESCRIPTIONS } from "@/lib/phaseTokens";
 
 interface PhasePopupProps {
   isOpen: boolean;
@@ -6,18 +8,6 @@ interface PhasePopupProps {
   onContinue: () => void;
   onWait: () => void;
 }
-
-const phaseNames: Record<Phase, string> = {
-  immersion: 'Imersão',
-  dive: 'Mergulho',
-  breath: 'Respiração',
-};
-
-const phaseDescriptions: Record<Phase, string> = {
-  immersion: 'Hora de focar e mergulhar na tarefa',
-  dive: 'Registre suas ações e insights',
-  breath: 'Momento de descanso e recuperação',
-};
 
 export function PhasePopup({ isOpen, nextPhase, onContinue, onWait }: PhasePopupProps) {
   if (!isOpen) return null;
@@ -60,26 +50,30 @@ export function PhasePopup({ isOpen, nextPhase, onContinue, onWait }: PhasePopup
               boxShadow: '0 0 20px hsla(200, 80%, 55%, 0.15)'
             }}
           >
-            {phaseNames[nextPhase]}
+            {PHASE_NAMES[nextPhase]}
           </span>
           <p className="text-muted-foreground mt-3 text-sm">
-            {phaseDescriptions[nextPhase]}
+            {PHASE_DESCRIPTIONS[nextPhase]}
           </p>
         </div>
 
         <div className="flex gap-3">
-          <button
+          <Button
+            type="button"
+            variant="secondary"
             onClick={onWait}
-            className="flex-1 ios-button-secondary"
+            className="flex-1"
           >
             Aguarde
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
             onClick={onContinue}
-            className="flex-1 ios-button-primary"
+            className="flex-1"
           >
             Sim, continuar
-          </button>
+          </Button>
         </div>
       </div>
     </div>

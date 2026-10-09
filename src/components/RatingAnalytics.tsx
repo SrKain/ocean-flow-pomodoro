@@ -74,10 +74,10 @@ export function RatingAnalytics({ stats }: RatingAnalyticsProps) {
       </div>
 
       {/* Distribution chart */}
-      <div className="glass-card" style={{ height: 180 }}>
+      <div className="glass-card w-full aspect-[2/1] min-h-[160px] max-h-[260px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} layout="vertical">
-            <XAxis type="number" stroke="hsl(200, 15%, 60%)" fontSize={10} />
+            <XAxis type="number" stroke="hsl(200, 15%, 60%)" fontSize={12} />
             <YAxis 
               type="category" 
               dataKey="rating" 

@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Waves, Mail, Lock, User, ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import { AppShell } from '@/components/layout/AppShell';
 
 const emailSchema = z.string().email('Email inválido');
 const passwordSchema = z.string().min(6, 'Senha deve ter pelo menos 6 caracteres');
@@ -130,15 +131,15 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <AppShell className="flex items-center justify-center">
         <div className="text-foreground">Carregando...</div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[hsl(195,85%,40%)] to-[hsl(215,65%,15%)] flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <AppShell className="flex flex-col items-center justify-center py-8" maxWidth="sm">
+      <div className="w-full">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center">
@@ -218,7 +219,8 @@ export default function Auth() {
 
             <Button
               type="submit"
-              className="w-full ios-button-primary"
+              variant="primary"
+              className="w-full"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Aguarde...' : (
@@ -230,12 +232,12 @@ export default function Auth() {
 
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => {
                 signInAsGuest();
                 navigate('/');
               }}
-              className="w-full ios-button-secondary"
+              className="w-full"
             >
               Continuar como Convidado
             </Button>
@@ -291,6 +293,6 @@ export default function Auth() {
           </div>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

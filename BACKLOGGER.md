@@ -42,6 +42,51 @@
 - **Histórico**:
   - 2026-10-08: Criada e concluída no baseline de importação.
 
+### BL-011 — Auditoria de UI/UX e Arquitetura de Reforma
+- **Status**: Concluído
+- **Tipo**: Auditoria / Arquitetura
+- **Solicitado por**: Usuário
+- **Data de Conclusão**: 2026-10-08
+- **Descrição**: Auditoria detalhada do repositório identificando problemas de scroll bloqueado, classes CSS inexistentes, duplicidade de árvores no PomodoroTimer, fragmentação de breakpoints, janela de PiP rígida e ausência de semântica acessível. Estabelecimento do plano estruturado de 8 etapas de reforma (E0 a E7).
+- **Histórico**:
+  - 2026-10-08: Concluída e aprovada para execução das etapas BL-012 a BL-019.
+
+### BL-012 — E0: Fundações de Layout, Viewport, Variantes de Botão e Estilos
+- **Status**: Concluído
+- **Tipo**: Reforma UI/UX / Fundações
+- **Solicitado por**: Usuário (Reforma de UI/UX)
+- **Data de Conclusão**: 2026-10-09
+- **Story Relacionado**: STORY-0002
+- **Relacionado a**: BL-011, CERME (MEC-001, MEC-006, MEC-024)
+- **Descrição**: Liberar scroll vertical nas páginas de conteúdo (Dashboard, Resumo, Configurações, Auth) removendo overflow:hidden global de index.html e mantendo travamento apenas na tela de foco. Normalizar safe-area-inset no shell sem duplicação em containers. Definir variantes do componente Button (primary, secondary, ghost, destructive) e substituir ios-button-* em Auth e PhasePopup. Trocar inputs e botões crus de Settings pelos componentes do sistema. Declarar keyframe scale-in no tailwind.config.ts e usar dvh nos max-h dos popups. Remover user-scalable=no do viewport (D4) e remover App.css não utilizado.
+- **Histórico**:
+  - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+  - 2026-10-09: Concluída e validada na etapa E0 (STORY-0002).
+
+### BL-013 — E1: Breakpoints Centralizados, Shell Compartilhado e Tokens de Fase
+- **Status**: Concluído
+- **Tipo**: Reforma UI/UX / Layout
+- **Solicitado por**: Usuário (Reforma de UI/UX)
+- **Data de Conclusão**: 2026-10-09
+- **Story Relacionado**: STORY-0003
+- **Relacionado a**: BL-011, CERME (MEC-002, MEC-006)
+- **Descrição**: Criar hook de contexto único para faixas de viewport e altura compacta, unificando useIsMobile e useLandscapeMode. Criar shell de layout compartilhado (max 1440px) com fundo escuro consistente em Auth, Resumo e NotFound. Centralizar tokens de cores de fase em módulo único. Ajustar gráficos com aspect-ratio proporcional e rótulos legíveis.
+- **Histórico**:
+  - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+  - 2026-10-09: Concluída e validada na etapa E1 (STORY-0003).
+
+### BL-014 — E2: Tela de Foco Unificada, Dimensionamento Polar e Composição Modular
+- **Status**: Concluído
+- **Tipo**: Reforma UI/UX / Foco
+- **Solicitado por**: Usuário (Reforma de UI/UX)
+- **Data de Conclusão**: 2026-10-09
+- **Story Relacionado**: STORY-0004
+- **Relacionado a**: BL-011, CERME (MEC-001, MEC-002, MEC-003, MEC-006)
+- **Descrição**: Substituir as duas árvores JSX de PomodoroTimer por uma única composição CSS/hook. Modularizar PomodoroTimer em TimerHeader, FocusContextPanel e TimerModals. Anel com dimensionamento proporcional clamp/dvh e tipografia tabular-nums. Duas colunas em desktop/paisagem e layout compacto sem scroll com sheet de Contexto em mobile retrato. Persistir seleções de tags e notas na sessão localmente. Corrigir MEC-006 no CERME.
+- **Histórico**:
+  - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+  - 2026-10-09: Concluída e validada na etapa E2 (STORY-0004).
+
 ---
 
 ## 2. Tarefas em Andamento
@@ -70,7 +115,50 @@
 
 ## 3. Tarefas Planejadas (Aprovadas)
 
-*Nenhuma tarefa planejada aguardando execução aprovada pelo usuário no momento.*
+### BL-015 — E3: Navegação Unificada em 3 Destinos e Acomodação Responsiva
+- **Status**: Planejada
+- **Tipo**: Reforma UI/UX / Navegação
+- **Solicitado por**: Usuário (Reforma de UI/UX)
+- **Relacionado a**: BL-011, CERME (MEC-001, MEC-019, MEC-022, MEC-023)
+- **Descrição**: Estruturar navegação em três destinos: Foco, Análises e Ajustes. Barra inferior em telas < 900px recolhida com timer rodando; rail lateral para >= 900px. Mover PiP para controle do timer e Missões/Tags para sheet. Timer ininterrupto entre rotas. Remover duplicidade de evolução diária entre Resumo e Dashboard. NotFound em português no tema do app. Padronizar nome Ocean Flow.
+- **Histórico**:
+  - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+
+### BL-016 — E4: Arquitetura de Picture-in-Picture Desacoplada e Mini-Timer Fallback
+- **Status**: Planejada
+- **Tipo**: Reforma UI/UX / PiP
+- **Solicitado por**: Usuário (Reforma de UI/UX)
+- **Relacionado a**: BL-011, CERME (MEC-005)
+- **Descrição**: Elevar instância de PiP para cima do shell. Três layouts responsivos (mínimo <= 160px, padrão 160-280px, ampliado > 280px) com unidades relativas (cqmin/vmin). Sincronizar currentTrack em todas as orientações. Confirmação ao pular por PiP. Atualização de janela por referência. Implementar fallback de PiP como mini-timer na própria página conforme D6. Atualizar MEC-005 no CERME ao concluir.
+- **Histórico**:
+  - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+
+### BL-017 — E5: Ajustes de Fluxo, Transições de Fase, Overfocus e Configurações
+- **Status**: Planejada
+- **Tipo**: Reforma UI/UX / Fluxo
+- **Solicitado por**: Usuário (Reforma de UI/UX)
+- **Relacionado a**: BL-011, CERME (MEC-001, MEC-003, MEC-004, MEC-023)
+- **Descrição**: Play após conclusão abre próxima fase. Overfocus ajustado conforme decisão D3 (parar antes para perguntar ao usuário). Confirmação de reset/edição quando há progresso. Validação de inputs em Settings ao sair do campo (sem fallback ao apagar) e unificação de limites com constante compartilhada.
+- **Histórico**:
+  - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+
+### BL-018 — E6: Acessibilidade WCAG AA, Diálogos Radix, Semântica e Reduced Motion
+- **Status**: Planejada
+- **Tipo**: Acessibilidade / UI
+- **Solicitado por**: Usuário (Reforma de UI/UX)
+- **Relacionado a**: BL-011, CERME (MEC-001, MEC-002, MEC-009, MEC-013, MEC-015)
+- **Descrição**: Atribuir role="timer" e aria-live="polite". Migrar popups customizados para base Radix (Dialog/Sheet) com foco preso, aria-modal e tecla Esc. Exclusão de tags fora do botão principal. Rótulos aria-label em controles iconográficos. Alvos de toque de no mínimo 44px e respeito a prefers-reduced-motion.
+- **Histórico**:
+  - 2026-10-08: Registrada como Planejada com aprovação do usuário.
+
+### BL-019 — E7: Resiliência de Integrações (Spotify, Notificações, Offline e Convidado)
+- **Status**: Planejada
+- **Tipo**: Integrações / Resiliência
+- **Solicitado por**: Usuário (Reforma de UI/UX)
+- **Relacionado a**: BL-011, CERME (MEC-008, MEC-014, MEC-016, MEC-024, MEC-026)
+- **Descrição**: Tratamento de estados do Spotify (desconectado, conectado sem faixa, tocando, erro). Exibir status de permissão de notificações em Ajustes. DailyRatingPrompt sem cobrir sessão em andamento (D7). Fallbacks locais para tags/missões em modo convidado e avisos de dados locais conforme D5.
+- **Histórico**:
+  - 2026-10-08: Registrada como Planejada com aprovação do usuário.
 
 ---
 

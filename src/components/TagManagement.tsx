@@ -265,7 +265,7 @@ export function TagManagement({ isOpen, onClose }: TagManagementProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="glass-popup w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col animate-scale-in">
+      <div className="glass-popup w-full max-w-lg max-h-[80dvh] overflow-hidden flex flex-col animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <h2 className="text-lg font-semibold text-foreground">Gerenciar Tags</h2>

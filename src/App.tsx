@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { SpotifyProvider } from "@/hooks/useSpotify";
+import { ViewportProvider } from "@/hooks/useBreakpoint";
 import Index from "./pages/Index";
 import Settings from "./pages/Settings";
 import Dashboard from "./pages/Dashboard";
@@ -75,15 +76,17 @@ const AppRoutes = () => (
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
-        <SpotifyProvider>
-          <Toaster />
-          <Sonner />
-          <AppRoutes />
-        </SpotifyProvider>
-      </AuthProvider>
-    </TooltipProvider>
+    <ViewportProvider>
+      <TooltipProvider>
+        <AuthProvider>
+          <SpotifyProvider>
+            <Toaster />
+            <Sonner />
+            <AppRoutes />
+          </SpotifyProvider>
+        </AuthProvider>
+      </TooltipProvider>
+    </ViewportProvider>
   </QueryClientProvider>
 );
 
