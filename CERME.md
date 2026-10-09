@@ -665,6 +665,7 @@ Canto superior da tela inicial e modal central.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
+- Persistência local para convidado e estado de erro recuperável adicionados (STORY-0006).
 
 ---
 
@@ -710,7 +711,6 @@ Botão de conexão no `NowPlaying.tsx` e `Settings.tsx`.
 
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
-- Persistência local para convidado e estado de erro recuperável adicionados (STORY-0006).
 - Persistência local de contingência e renovação resiliente de token adicionadas (STORY-0005).
 
 ---
