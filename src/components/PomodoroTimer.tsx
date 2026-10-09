@@ -38,6 +38,7 @@ export function PomodoroTimer() {
   const [showMissionsPopup, setShowMissionsPopup] = useState(false);
   const [showPip, setShowPip] = useState(false);
   const [showContextSheet, setShowContextSheet] = useState(false);
+  const [clockNow, setClockNow] = useState(() => Date.now());
 
   // Persistência local de tags e notas da sessão
   const [selectedTags, setSelectedTags] = useState<Tag[]>(() => {
@@ -80,6 +81,12 @@ export function PomodoroTimer() {
 
   const startTimeRef = useRef<string | null>(null);
   const pendingPhaseRef = useRef<Phase | null>(null);
+  const handledPhaseEndRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (session?.started_at) startTimeRef.current = session.started_at;
+    else if (!session || session.timer_status === 'idle') startTimeRef.current = null;
+  }, [session]);
 
   const { signOut } = useAuth();
   const { currentTrack } = useSpotify();
@@ -133,12 +140,16 @@ export function PomodoroTimer() {
 
   // Derived state from session
   const currentPhase = (session?.current_phase as Phase) || 'immersion';
-  const timeLeft = session?.time_left || 0;
+  const timeLeft = session?.timer_status === 'running' && session.end_at
+    ? Math.max(0, Math.ceil((Date.parse(session.end_at) - clockNow) / 1000))
+    : session?.time_left || 0;
   const totalTime = session?.total_time || (settings?.immersionMinutes || 5) * 60;
-  const isRunning = session?.is_running || false;
+  const isRunning = session?.timer_status === 'running' || session?.timer_status === 'overtime' || session?.is_running || false;
   const cycleCount = session?.cycle_count || 0;
-  const isOvertime = session?.is_overtime || false;
-  const extraTime = session?.extra_time_seconds || 0;
+  const isOvertime = session?.timer_status === 'overtime' || session?.is_overtime || false;
+  const extraTime = isOvertime && session?.overtime_started_at
+    ? Math.max(0, Math.floor((clockNow - Date.parse(session.overtime_started_at)) / 1000))
+    : session?.extra_time_seconds || 0;
 
   const getPhaseTime = useCallback((phase: Phase) => {
     if (!settings) return 5 * 60;
@@ -155,7 +166,8 @@ export function PomodoroTimer() {
   };
 
   const saveCycle = useCallback(async (completed: boolean): Promise<string | null> => {
-    if (startTimeRef.current) {
+    const phaseStartTime = startTimeRef.current || session?.started_at || null;
+    if (phaseStartTime) {
       const immersionTagNames = selectedTags.map(t => t.name).join(', ');
       const diveTagNames = diveTags.map(t => t.name).join(', ');
       const breathTagNames = breathTags.map(t => t.name).join(', ');
@@ -178,7 +190,7 @@ export function PomodoroTimer() {
 
       const cycleId = await saveCycleRecordAsync({
         phase: currentPhase,
-        startTime: startTimeRef.current,
+        startTime: phaseStartTime,
         endTime: new Date().toISOString(),
         tag: tagValue,
         actions: actionsValue,
@@ -191,11 +203,12 @@ export function PomodoroTimer() {
       return cycleId;
     }
     return null;
-  }, [currentPhase, selectedTags, diveTags, breathTags, diveNotes, currentTrack]);
+  }, [currentPhase, selectedTags, diveTags, breathTags, diveNotes, currentTrack, session?.started_at]);
 
   const startPhase = useCallback((phase: Phase) => {
     const time = getPhaseTime(phase);
-    startTimeRef.current = new Date().toISOString();
+    const now = Date.now();
+    startTimeRef.current = new Date(now).toISOString();
 
     updateSession({
       current_phase: phase,
@@ -203,8 +216,13 @@ export function PomodoroTimer() {
       total_time: time,
       is_running: true,
       started_at: startTimeRef.current,
+      end_at: new Date(now + time * 1000).toISOString(),
+      paused_at: null,
+      remaining_when_paused: time,
       is_overtime: false,
       extra_time_seconds: 0,
+      overtime_started_at: null,
+      timer_status: 'running',
       cycle_count: phase === 'immersion' ? cycleCount + 1 : cycleCount,
     });
 
@@ -212,19 +230,34 @@ export function PomodoroTimer() {
   }, [getPhaseTime, updateSession, cycleCount]);
 
   const handlePhaseComplete = useCallback(async () => {
+    if (!session || session.timer_status === 'overtime' || session.timer_status === 'transition') return;
+    if (session.end_at && handledPhaseEndRef.current === session.end_at) return;
+    handledPhaseEndRef.current = session.end_at;
+    const overtimeStartedAt = session.end_at || new Date().toISOString();
     updateSession({
       is_overtime: true,
       is_running: true,
-      extra_time_seconds: 0,
+      time_left: 0,
+      end_at: null,
+      paused_at: null,
+      remaining_when_paused: 0,
+      overtime_started_at: overtimeStartedAt,
+      extra_time_seconds: Math.max(0, Math.floor((Date.now() - Date.parse(overtimeStartedAt)) / 1000)),
+      timer_status: 'overtime',
     });
 
     notifyOverfocus();
-  }, [updateSession, notifyOverfocus]);
+  }, [session, updateSession, notifyOverfocus]);
 
   const handleOverfocusDecision = useCallback(async (_includeExtraTime: boolean) => {
     updateSession({
       is_running: false,
       is_overtime: false,
+      end_at: null,
+      paused_at: null,
+      remaining_when_paused: 0,
+      overtime_started_at: null,
+      timer_status: 'transition',
     });
 
     const cycleId = await saveCycle(true);
@@ -242,7 +275,7 @@ export function PomodoroTimer() {
   }, [currentPhase, saveCycle, updateSession, notifyPhaseComplete, notifyCycleComplete, cycleCount]);
 
   const handleSkip = useCallback(async () => {
-    updateSession({ is_running: false, is_overtime: false });
+    updateSession({ is_running: false, is_overtime: false, end_at: null, timer_status: 'transition' });
     await saveCycle(false);
 
     const next = getNextPhase(currentPhase);
@@ -251,7 +284,7 @@ export function PomodoroTimer() {
   }, [currentPhase, saveCycle, updateSession]);
 
   const handleCompleteCycle = useCallback(async () => {
-    updateSession({ is_running: false, is_overtime: false });
+    updateSession({ is_running: false, is_overtime: false, end_at: null, timer_status: 'transition' });
     const cycleId = await saveCycle(true);
 
     if (currentPhase === 'breath' && cycleId) {
@@ -265,14 +298,51 @@ export function PomodoroTimer() {
   }, [currentPhase, saveCycle, updateSession]);
 
   const handlePlayPause = useCallback(() => {
-    if (!isRunning && !startTimeRef.current) {
-      startTimeRef.current = new Date().toISOString();
+    if (!session) return;
+    const now = Date.now();
+    if (isOvertime && isRunning) {
+      updateSession({
+        is_running: false,
+        is_overtime: true,
+        timer_status: 'paused',
+        extra_time_seconds: extraTime,
+        paused_at: new Date(now).toISOString(),
+        overtime_started_at: null,
+      });
+      return;
     }
+    if (isOvertime && !isRunning) {
+      updateSession({
+        is_running: true,
+        is_overtime: true,
+        timer_status: 'overtime',
+        overtime_started_at: new Date(now - extraTime * 1000).toISOString(),
+        paused_at: null,
+      });
+      return;
+    }
+    if (isRunning) {
+      updateSession({
+        is_running: false,
+        timer_status: 'paused',
+        time_left: timeLeft,
+        remaining_when_paused: timeLeft,
+        paused_at: new Date(now).toISOString(),
+        end_at: null,
+      });
+      return;
+    }
+    if (!startTimeRef.current) startTimeRef.current = session.started_at || new Date(now).toISOString();
+    const remaining = Math.max(0, timeLeft);
     updateSession({
-      is_running: !isRunning,
-      started_at: !isRunning ? new Date().toISOString() : session?.started_at,
+      is_running: true,
+      timer_status: 'running',
+      started_at: startTimeRef.current,
+      end_at: new Date(now + remaining * 1000).toISOString(),
+      paused_at: null,
+      remaining_when_paused: remaining,
     });
-  }, [isRunning, updateSession, session?.started_at]);
+  }, [isRunning, isOvertime, session, timeLeft, extraTime, updateSession]);
 
   const handleContinue = () => {
     if (pendingPhaseRef.current) {
@@ -305,6 +375,7 @@ export function PomodoroTimer() {
 
   const handleReset = useCallback(() => {
     const phaseDuration = getPhaseTime(currentPhase);
+    startTimeRef.current = null;
     updateSession({
       time_left: phaseDuration,
       total_time: phaseDuration,
@@ -312,6 +383,11 @@ export function PomodoroTimer() {
       is_running: false,
       is_overtime: false,
       extra_time_seconds: 0,
+      end_at: null,
+      paused_at: null,
+      remaining_when_paused: phaseDuration,
+      overtime_started_at: null,
+      timer_status: 'idle',
     });
   }, [currentPhase, getPhaseTime, updateSession]);
 
@@ -319,25 +395,34 @@ export function PomodoroTimer() {
     updateSession({
       time_left: newTimeSeconds,
       total_time: newTimeSeconds,
+      remaining_when_paused: newTimeSeconds,
+      end_at: null,
+      timer_status: session?.timer_status === 'paused' ? 'paused' : 'idle',
     });
-  }, [updateSession]);
+  }, [updateSession, session?.timer_status]);
 
-  // Timer countdown
+  // The browser derives visible time from end_at; only phase transitions are persisted.
   useEffect(() => {
     if (!isRunning) return;
 
-    const interval = setInterval(() => {
-      if (isOvertime) {
-        updateSession({ extra_time_seconds: extraTime + 1 });
-      } else if (timeLeft <= 1) {
+    const refreshClock = () => {
+      const now = Date.now();
+      setClockNow(now);
+      if (!isOvertime && session?.end_at && Date.parse(session.end_at) <= now) {
         handlePhaseComplete();
-      } else {
-        updateSession({ time_left: timeLeft - 1 });
       }
-    }, 1000);
+    };
+    refreshClock();
+    const interval = setInterval(refreshClock, 250);
 
     return () => clearInterval(interval);
-  }, [isRunning, timeLeft, isOvertime, extraTime, handlePhaseComplete, updateSession]);
+  }, [isRunning, isOvertime, session?.end_at, handlePhaseComplete]);
+
+  useEffect(() => {
+    if (session?.timer_status !== 'transition') return;
+    pendingPhaseRef.current = getNextPhase(currentPhase);
+    setShowPopup(true);
+  }, [session?.timer_status, currentPhase]);
 
   // Pulsing glow animation
   useEffect(() => {

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { Phase, getSettingsAsync, PomodoroSettings } from '@/lib/database';
-import { TimerStatus } from '@/lib/timerEngine';
+import { Phase, flushPendingCycleRecordsAsync, getSettingsAsync, PomodoroSettings } from '@/lib/database';
+import { reconcilePersistedTimer, TimerStatus } from '@/lib/timerEngine';
 
 export interface ActiveSession {
   id: string;
@@ -21,6 +21,7 @@ export interface ActiveSession {
   remaining_when_paused: number | null;
   overtime_started_at: string | null;
   timer_status: TimerStatus;
+  revision: number;
 }
 
 function normalizeSession(session: ActiveSession): ActiveSession {
@@ -39,17 +40,18 @@ function normalizeSession(session: ActiveSession): ActiveSession {
       : null
   );
 
-  return {
+  return reconcilePersistedTimer({
     ...session,
     end_at: session.end_at || (legacyEndAt === null ? null : new Date(legacyEndAt).toISOString()),
     paused_at: session.paused_at || null,
     remaining_when_paused: session.remaining_when_paused ?? session.time_left,
     overtime_started_at: overtimeStartedAt,
     timer_status: status,
+    revision: Number(session.revision || 0),
     extra_time_seconds: status === 'overtime' && overtimeStartedAt
       ? Math.max(0, Math.floor((now - new Date(overtimeStartedAt).getTime()) / 1000))
       : session.extra_time_seconds || 0,
-  };
+  });
 }
 
 function migrateLegacyIdleSession(session: ActiveSession, settings: PomodoroSettings): ActiveSession {
@@ -66,23 +68,56 @@ function migrateLegacyIdleSession(session: ActiveSession, settings: PomodoroSett
   const duration = settings.immersionMinutes * 60;
   if (session.total_time === duration) return session;
 
-  return {
+  return reconcilePersistedTimer({
     ...session,
     time_left: duration,
     total_time: duration,
     remaining_when_paused: duration,
     end_at: null,
     paused_at: null,
-  };
+  }, now, true) as ActiveSession;
+}
+
+async function persistSessionRevision(session: ActiveSession, userId: string, expectedRevision: number) {
+  const { data, error } = await supabase.from('active_sessions').update({
+    current_phase: session.current_phase,
+    time_left: session.time_left,
+    total_time: session.total_time,
+    is_running: session.is_running,
+    cycle_count: session.cycle_count,
+    started_at: session.started_at,
+    updated_at: session.updated_at,
+    extra_time_seconds: session.extra_time_seconds,
+    is_overtime: session.is_overtime,
+    end_at: session.end_at,
+    paused_at: session.paused_at,
+    remaining_when_paused: session.remaining_when_paused,
+    overtime_started_at: session.overtime_started_at,
+    timer_status: session.timer_status,
+    revision: session.revision,
+  }).eq('user_id', userId).eq('revision', expectedRevision).select('id').maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export function useSessionSync() {
   const { user } = useAuth();
   const [session, setSession] = useState<ActiveSession | null>(null);
+  const sessionRef = useRef<ActiveSession | null>(null);
   const [settings, setSettings] = useState<PomodoroSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastUpdateRef = useRef<number>(0);
+  const remoteWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    const flush = () => { void flushPendingCycleRecordsAsync(); };
+    flush();
+    window.addEventListener('online', flush);
+    window.addEventListener('focus', flush);
+    return () => {
+      window.removeEventListener('online', flush);
+      window.removeEventListener('focus', flush);
+    };
+  }, [user?.id]);
 
   // Load settings
   useEffect(() => {
@@ -108,17 +143,35 @@ export function useSessionSync() {
       remaining_when_paused: defaultTimeSeconds,
       overtime_started_at: null,
       timer_status: 'idle',
+      revision: 0,
     };
   }, [settings, user]);
 
   const loadLocalSession = useCallback((): ActiveSession => {
-    const saved = localStorage.getItem('ocean_flow_active_session');
+    const key = `ocean_flow_active_session:${user?.id || 'guest'}`;
+    let saved = localStorage.getItem(key);
+    if (!saved) {
+      const legacy = localStorage.getItem('ocean_flow_active_session');
+      if (legacy) {
+        try {
+          const candidate = JSON.parse(legacy) as ActiveSession;
+          if (!candidate.user_id || candidate.user_id === user?.id) {
+            saved = legacy;
+            localStorage.setItem(key, legacy);
+            localStorage.removeItem('ocean_flow_active_session');
+          }
+        } catch {
+          localStorage.removeItem('ocean_flow_active_session');
+        }
+      }
+    }
     if (saved) {
       try {
         const normalized = normalizeSession(JSON.parse(saved) as ActiveSession);
         const migrated = settings ? migrateLegacyIdleSession(normalized, settings) : normalized;
+        migrated.user_id = user?.id || migrated.user_id;
         if (migrated !== normalized) {
-          localStorage.setItem('ocean_flow_active_session', JSON.stringify(migrated));
+          localStorage.setItem(key, JSON.stringify(migrated));
         }
         return migrated;
       } catch {
@@ -126,19 +179,24 @@ export function useSessionSync() {
       }
     }
     return createDefaultSession();
-  }, [createDefaultSession]);
+  }, [createDefaultSession, user?.id, settings]);
+
+  const commitSession = useCallback((next: ActiveSession | null) => {
+    sessionRef.current = next;
+    setSession(next);
+  }, []);
 
   // Fetch or create session
   useEffect(() => {
     if (!user) {
-      setSession(null);
+      commitSession(null);
       setLoading(false);
       return;
     }
 
     if (!isSupabaseConfigured || user.id.startsWith('local-')) {
       const local = loadLocalSession();
-      setSession(local);
+      commitSession(local);
       setLoading(false);
       return;
     }
@@ -156,16 +214,44 @@ export function useSessionSync() {
         if (data) {
           const normalized = normalizeSession(data as unknown as ActiveSession);
           const migrated = settings ? migrateLegacyIdleSession(normalized, settings) : normalized;
-          setSession(migrated);
-          if (migrated !== normalized) {
-            await supabase.from('active_sessions').update({
-              time_left: migrated.time_left,
-              total_time: migrated.total_time,
-              remaining_when_paused: migrated.remaining_when_paused,
-              end_at: null,
-              paused_at: null,
-              updated_at: new Date().toISOString(),
-            }).eq('user_id', user.id);
+          const localKey = `ocean_flow_active_session:${user.id}`;
+          let localCandidate: ActiveSession | null = null;
+          const storedLocal = localStorage.getItem(localKey);
+          if (storedLocal) {
+            try { localCandidate = normalizeSession(JSON.parse(storedLocal) as ActiveSession); } catch { /* ignore invalid local snapshot */ }
+          }
+          const localIsNewer = Boolean(localCandidate && (
+            localCandidate.revision > migrated.revision ||
+            (localCandidate.revision === migrated.revision && Date.parse(localCandidate.updated_at) > Date.parse(migrated.updated_at))
+          ));
+          const latest = localIsNewer
+            ? { ...localCandidate!, revision: Math.max(localCandidate!.revision, migrated.revision + 1) }
+            : migrated;
+          commitSession(latest);
+          localStorage.setItem(localKey, JSON.stringify(latest));
+          if (localIsNewer) {
+            try {
+              const saved = await persistSessionRevision(latest, user.id, migrated.revision);
+              if (!saved) console.warn('A newer session revision already exists remotely; it will be reconciled by realtime.');
+            } catch (syncError) {
+              console.error('Could not synchronize the latest local timer snapshot:', syncError);
+            }
+          }
+          if (!localIsNewer && migrated !== normalized) {
+            const migrationUpdate = {
+              ...migrated,
+              revision: migrated.revision + 1,
+              updated_at: new Date(Math.max(Date.now(), Date.parse(migrated.updated_at) + 1)).toISOString(),
+            };
+            try {
+              const saved = await persistSessionRevision(migrationUpdate, user.id, normalized.revision);
+              if (saved) {
+                commitSession(migrationUpdate);
+                localStorage.setItem(localKey, JSON.stringify(migrationUpdate));
+              }
+            } catch (migrationError) {
+              console.error('Could not persist the legacy timer migration:', migrationError);
+            }
           }
         } else {
           // Create new session
@@ -188,11 +274,13 @@ export function useSessionSync() {
             .single();
 
           if (createError) throw createError;
-          setSession(normalizeSession(created as unknown as ActiveSession));
+          const normalized = normalizeSession(created as unknown as ActiveSession);
+          commitSession(normalized);
+          localStorage.setItem(`ocean_flow_active_session:${user.id}`, JSON.stringify(normalized));
         }
       } catch (e) {
         console.error('Error fetching session, falling back to local:', e);
-        setSession(loadLocalSession());
+        commitSession(loadLocalSession());
       } finally {
         setLoading(false);
       }
@@ -214,13 +302,15 @@ export function useSessionSync() {
         (payload) => {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             const newData = normalizeSession(payload.new as unknown as ActiveSession);
-            // Only update if this is from another device (compare timestamps)
-            const updateTime = new Date(newData.updated_at).getTime();
-            if (updateTime > lastUpdateRef.current + 500) { // 500ms buffer
-              setSession(newData);
+            const currentTime = sessionRef.current ? Date.parse(sessionRef.current.updated_at) : 0;
+            const incomingTime = Date.parse(newData.updated_at);
+            if (!sessionRef.current || newData.revision > sessionRef.current.revision ||
+              (newData.revision === sessionRef.current.revision && incomingTime > currentTime)) {
+              commitSession(newData);
+              localStorage.setItem(`ocean_flow_active_session:${user.id}`, JSON.stringify(newData));
             }
           } else if (payload.eventType === 'DELETE') {
-            setSession(null);
+            commitSession(null);
           }
         }
       )
@@ -229,43 +319,101 @@ export function useSessionSync() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, settings, isSupabaseConfigured, loadLocalSession]);
+  }, [user, settings, loadLocalSession, commitSession]);
 
-  // Debounced update to server
+  // Persist state transitions locally first, then serialize remote writes.
   const updateSession = useCallback(async (updates: Partial<ActiveSession>) => {
-    if (!user || !session) return;
+    const current = sessionRef.current;
+    if (!user || !current) return;
 
-    // Update local state immediately
-    const updatedSession = { ...session, ...updates, updated_at: new Date().toISOString() };
-    setSession(updatedSession);
-    localStorage.setItem('ocean_flow_active_session', JSON.stringify(updatedSession));
-    lastUpdateRef.current = Date.now();
+    const updatedAt = new Date(Math.max(Date.now(), Date.parse(current.updated_at) + 1)).toISOString();
+    const updatedSession = { ...current, ...updates, revision: current.revision + 1, updated_at: updatedAt };
+    commitSession(updatedSession);
+    localStorage.setItem(`ocean_flow_active_session:${user.id}`, JSON.stringify(updatedSession));
 
     if (!isSupabaseConfigured || user.id.startsWith('local-')) {
       return;
     }
 
-    // Debounce server updates
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-    }
-
-    updateTimeoutRef.current = setTimeout(async () => {
+    // Serialize state-transition writes so a slower request cannot overwrite a newer transition.
+    remoteWriteQueueRef.current = remoteWriteQueueRef.current.catch(() => undefined).then(async () => {
       try {
-        const { error } = await supabase
-          .from('active_sessions')
-          .update({
-            ...updates,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('user_id', user.id);
-
+        const { data, error } = await supabase.from('active_sessions').update({
+          ...updates,
+          revision: updatedSession.revision,
+          updated_at: updatedAt,
+        }).eq('user_id', user.id).eq('revision', current.revision).select('id').maybeSingle();
         if (error) throw error;
+        if (data) return;
+
+        // Another device won the compare-and-set. Reapply this explicit transition once.
+        const { data: latest, error: fetchError } = await supabase.from('active_sessions')
+          .select('*').eq('user_id', user.id).maybeSingle();
+        if (fetchError || !latest) throw fetchError || new Error('Active session disappeared during synchronization.');
+        const latestRevision = Number(latest.revision || 0);
+        const retrySession: ActiveSession = {
+          ...(latest as unknown as ActiveSession),
+          ...updates,
+          revision: latestRevision + 1,
+          updated_at: new Date(Math.max(Date.now(), Date.parse(latest.updated_at) + 1)).toISOString(),
+        };
+        commitSession(retrySession);
+        localStorage.setItem(`ocean_flow_active_session:${user.id}`, JSON.stringify(retrySession));
+        const { data: retried, error: retryError } = await supabase.from('active_sessions').update({
+          ...updates,
+          revision: retrySession.revision,
+          updated_at: retrySession.updated_at,
+        }).eq('user_id', user.id).eq('revision', latestRevision).select('id').maybeSingle();
+        if (retryError || !retried) throw retryError || new Error('Could not reconcile concurrent timer updates.');
       } catch (e) {
         console.error('Error updating session:', e);
       }
-    }, 300); // 300ms debounce
-  }, [user, session]);
+    });
+    await remoteWriteQueueRef.current;
+  }, [user, commitSession]);
+
+  const syncLocalSession = useCallback(async () => {
+    if (!user || !isSupabaseConfigured || user.id.startsWith('local-')) return;
+    const local = sessionRef.current;
+    if (!local) return;
+
+    try {
+      const { data: remote, error } = await supabase.from('active_sessions')
+        .select('*').eq('user_id', user.id).maybeSingle();
+      if (error || !remote) throw error || new Error('Active session is not available for synchronization.');
+      const remoteSession = normalizeSession(remote as unknown as ActiveSession);
+      const localIsNewer = local.revision > remoteSession.revision ||
+        (local.revision === remoteSession.revision && Date.parse(local.updated_at) > Date.parse(remoteSession.updated_at));
+
+      if (!localIsNewer) {
+        if (remoteSession.revision > local.revision || Date.parse(remoteSession.updated_at) > Date.parse(local.updated_at)) {
+          commitSession(remoteSession);
+          localStorage.setItem(`ocean_flow_active_session:${user.id}`, JSON.stringify(remoteSession));
+        }
+        return;
+      }
+
+      const snapshot = { ...local, revision: Math.max(local.revision, remoteSession.revision + 1) };
+      const saved = await persistSessionRevision(snapshot, user.id, remoteSession.revision);
+      if (saved && sessionRef.current === local) {
+        commitSession(snapshot);
+        localStorage.setItem(`ocean_flow_active_session:${user.id}`, JSON.stringify(snapshot));
+      }
+    } catch (error) {
+      console.error('Could not retry timer synchronization:', error);
+    }
+  }, [user, commitSession]);
+
+  useEffect(() => {
+    const retry = () => { void syncLocalSession(); };
+    retry();
+    window.addEventListener('online', retry);
+    window.addEventListener('focus', retry);
+    return () => {
+      window.removeEventListener('online', retry);
+      window.removeEventListener('focus', retry);
+    };
+  }, [syncLocalSession]);
 
   // Reset session
   const resetSession = useCallback(async () => {
@@ -281,11 +429,11 @@ export function useSessionSync() {
       started_at: null,
       extra_time_seconds: 0,
       is_overtime: false,
-          end_at: null,
-          paused_at: null,
-          remaining_when_paused: defaultTimeSeconds,
-          overtime_started_at: null,
-          timer_status: 'idle',
+      end_at: null,
+      paused_at: null,
+      remaining_when_paused: defaultTimeSeconds,
+      overtime_started_at: null,
+      timer_status: 'idle',
     });
   }, [user, settings, updateSession]);
 

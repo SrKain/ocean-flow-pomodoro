@@ -134,6 +134,25 @@
 - **Arquivos principais**: `src/lib/database.ts`, `src/lib/tasks.ts`, `src/pages/Dashboard.tsx`, `src/pages/DailySummary.tsx`, `src/components/AIInsightsCard.tsx`, `src/components/MissionsPopup.tsx`, `src/components/MissionsWidget.tsx`, `src/pages/Settings.tsx`, `supabase/functions/daily-email-summary/index.ts`, `public/_redirects`.
 - **Histórico**:
   - 2026-10-09: Plano aprovado expressamente pelo usuário; implementação iniciada (STORY-0006).
+
+### BL-022 — Refatoração de Confiabilidade do Timer, Dados e Integrações
+- **Status**: Em andamento (E1–E3 implementadas localmente; E4 depende de configuração externa; E0/E5 e publicação ainda pendentes)
+- **Tipo**: Refatoração de arquitetura / Persistência / Sincronização / Integrações
+- **Solicitado por**: Usuário
+- **Data de Início**: 2026-10-09
+- **Relacionado a**: BL-011, BL-020, BL-021; CERME (MEC-001, MEC-015, MEC-016, MEC-019, MEC-022, MEC-023, MEC-025, MEC-026)
+- **Descrição**: Tornar o timer baseado em transições e timestamps, confiável após pausa, recarga, offline e uso em múltiplas abas/dispositivos; persistir cada ciclo localmente e sincronizá-lo de forma idempotente; unificar a origem dos relatórios; estabilizar sessão Spotify, Insights IA e envio de email; melhorar estados e feedback de sincronização. Preservar os dados atuais. Avaliar migração de banco somente após auditar schema, migrações, RLS, secrets e confiabilidade do Supabase ativo.
+- **Etapas**:
+  - E0: Diagnóstico do estado real do Supabase/deploy e inventário de dados locais/remotos; backup verificável.
+  - E1: Máquina de estados temporal, atualização por eventos e reconciliação entre recarga, abas e dispositivos.
+  - E2: Outbox e upsert idempotente para ciclos; relatórios derivados de um repositório canônico.
+  - E3: Integração Spotify com estados recuperáveis; separar rastreamento de faixa de comandos do player.
+  - E4: Robustez de relatórios/Insights/email, configuração de funções e respostas de erro.
+  - E5: Validação de fluxos, lançamento gradual, documentação e decisão final sobre banco.
+- **Decisão inicial de banco**: Manter Supabase durante E0–E4. Migração só será recomendada se evidência operacional ou limitação comprovada justificar o custo de substituir Auth, Postgres, Realtime e Edge Functions.
+- **Histórico**:
+  - 2026-10-09: Plano completo aprovado expressamente pelo usuário; E0/E1 iniciadas.
+  - 2026-10-09: Timer baseado em timestamps, revisão CAS e retomada local implementados; ciclos remotos passaram a usar outbox com upsert idempotente; relatórios passaram a derivar do repositório híbrido canônico; restauração da sessão Spotify prioriza tokens locais e renovação tem cooldown. Migração aditiva registrada. Acesso remoto/backup, secrets SMTP/IA e deploy não puderam ser confirmados; build bloqueado pela verificação de cache nativo do SWC no Windows.
 ---
 
 ## 3. Tarefas Planejadas (Aprovadas)

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 import { useAuth } from './useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 
 interface SpotifyTrack {
   name: string;
@@ -66,6 +66,8 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<SpotifyTrack | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
+  const refreshRetryAfterRef = useRef(0);
+  const trackRequestInFlightRef = useRef(false);
 
   const localTokenKey = user ? `ocean_flow_spotify_${user.id}` : null;
   const readLocalTokens = (): StoredSpotifyTokens | null => {
@@ -95,7 +97,26 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     setCurrentTrack(null);
     setIsLoading(true);
 
+    const applyStoredTokens = (tokens: StoredSpotifyTokens | null) => {
+      if (!tokens) return;
+      setRefreshToken(tokens.refreshToken);
+      setExpiresAt(tokens.expiresAt);
+      if (Date.now() < tokens.expiresAt) {
+        setAccessToken(tokens.accessToken);
+      } else if (tokens.refreshToken) {
+        setAccessToken(null);
+        void refreshAccessToken(tokens.refreshToken);
+      }
+    };
+
     const loadTokensFromDb = async () => {
+      const localTokens = readLocalTokens();
+      applyStoredTokens(localTokens);
+      if (localTokens) setIsLoading(false);
+      if (!isSupabaseConfigured) {
+        setIsLoading(false);
+        return;
+      }
       try {
         const { data, error } = await supabase
           .from('spotify_connections')
@@ -103,7 +124,7 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (error) console.error('Error loading Spotify tokens:', error);
+        if (error) throw error;
 
         const remoteTokens = data
           ? {
@@ -112,29 +133,27 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
               expiresAt: Number(data.expires_at),
             }
           : null;
-        const localTokens = readLocalTokens();
         const savedTokens = localTokens && (!remoteTokens || localTokens.expiresAt >= remoteTokens.expiresAt)
           ? localTokens
           : remoteTokens;
 
-        if (savedTokens) {
-          setRefreshToken(savedTokens.refreshToken);
-          setExpiresAt(savedTokens.expiresAt);
-          if (Date.now() < savedTokens.expiresAt) {
-            setAccessToken(savedTokens.accessToken);
-          } else if (savedTokens.refreshToken) {
-            await refreshAccessToken(savedTokens.refreshToken);
+        if (savedTokens && savedTokens !== localTokens) {
+          try {
+            if (localTokenKey) localStorage.setItem(localTokenKey, JSON.stringify(savedTokens));
+          } catch (storageError) {
+            console.error('Error restoring Spotify tokens locally:', storageError);
           }
+          applyStoredTokens(savedTokens);
         }
       } catch (error) {
-        console.error('Error loading Spotify tokens:', error);
+        console.warn('Spotify remote token lookup failed; using the saved local connection when available:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
     loadTokensFromDb();
-  }, [user]);
+  }, [user, localTokenKey]);
 
   // Handle OAuth callback
   useEffect(() => {
@@ -229,6 +248,8 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   const refreshAccessToken = async (token: string) => {
     if (!user) return;
     if (refreshPromiseRef.current) return refreshPromiseRef.current;
+    if (Date.now() < refreshRetryAfterRef.current) return;
+    refreshRetryAfterRef.current = Date.now() + 30000;
 
     refreshPromiseRef.current = (async () => {
       try {
@@ -250,6 +271,7 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (data.access_token) {
+        refreshRetryAfterRef.current = 0;
         const expiry = Date.now() + data.expires_in * 1000;
         const newRefreshToken = data.refresh_token || token;
 
@@ -327,15 +349,15 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
 
   // Fetch currently playing track
   const fetchCurrentTrack = useCallback(async () => {
-    if (!accessToken || !user) return;
-
-    // Check if token needs refresh
-    if (expiresAt && Date.now() > expiresAt - 60000 && refreshToken) {
-      await refreshAccessToken(refreshToken);
-      return;
-    }
-
+    if (!accessToken || !user || trackRequestInFlightRef.current) return;
+    trackRequestInFlightRef.current = true;
     try {
+      // Refresh once before expiry; a cooldown prevents repeated refresh requests on errors.
+      if (expiresAt && Date.now() > expiresAt - 60000 && refreshToken) {
+        await refreshAccessToken(refreshToken);
+        return;
+      }
+
       const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -370,6 +392,8 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error fetching current track:', error);
+    } finally {
+      trackRequestInFlightRef.current = false;
     }
   }, [accessToken, expiresAt, refreshToken, disconnect, user]);
 

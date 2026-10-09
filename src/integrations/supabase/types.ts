@@ -23,6 +23,12 @@ export type Database = {
           is_overtime: boolean
           is_running: boolean
           started_at: string | null
+          end_at: string | null
+          paused_at: string | null
+          remaining_when_paused: number | null
+          overtime_started_at: string | null
+          timer_status: "idle" | "running" | "paused" | "transition" | "overtime" | "completed"
+          revision: number
           time_left: number
           total_time: number
           updated_at: string
@@ -36,6 +42,12 @@ export type Database = {
           is_overtime?: boolean
           is_running?: boolean
           started_at?: string | null
+          end_at?: string | null
+          paused_at?: string | null
+          remaining_when_paused?: number | null
+          overtime_started_at?: string | null
+          timer_status?: "idle" | "running" | "paused" | "transition" | "overtime" | "completed"
+          revision?: number
           time_left?: number
           total_time?: number
           updated_at?: string
@@ -49,6 +61,12 @@ export type Database = {
           is_overtime?: boolean
           is_running?: boolean
           started_at?: string | null
+          end_at?: string | null
+          paused_at?: string | null
+          remaining_when_paused?: number | null
+          overtime_started_at?: string | null
+          timer_status?: "idle" | "running" | "paused" | "transition" | "overtime" | "completed"
+          revision?: number
           time_left?: number
           total_time?: number
           updated_at?: string
@@ -171,6 +189,7 @@ export type Database = {
           dive_minutes: number
           id: string
           immersion_minutes: number
+          auto_advance: boolean
           updated_at: string
           user_id: string | null
         }
@@ -180,6 +199,7 @@ export type Database = {
           dive_minutes?: number
           id?: string
           immersion_minutes?: number
+          auto_advance?: boolean
           updated_at?: string
           user_id?: string | null
         }
@@ -189,6 +209,7 @@ export type Database = {
           dive_minutes?: number
           id?: string
           immersion_minutes?: number
+          auto_advance?: boolean
           updated_at?: string
           user_id?: string | null
         }

@@ -304,3 +304,60 @@ Observações:
 - Nenhum registro existente de ciclo ou tarefa foi removido.
 - A hospedagem Lovable Cloud é indicada no plano local do projeto; o fallback entregue precisa ser reconhecido pela plataforma de publicação para corrigir 404 em URLs diretas.
 - O envio de email continua dependendo de SMTP e secrets válidos no projeto Supabase; a chave de IA depende da configuração `LOVABLE_API_KEY`.
+
+---
+
+## STORY-0007 — Relógio Resiliente e Sincronização de Ciclos
+
+Data:
+2026-10-09
+
+Solicitado por:
+Usuário
+
+Executado por:
+OpenAI Codex
+
+Plataforma:
+Codex Desktop
+
+Modelo:
+GPT-6
+
+Resumo:
+Iniciada a refatoração de confiabilidade aprovada para o app. A sessão do timer agora prioriza timestamps absolutos em vez de gravar decrementos a cada segundo, serializa transições remotas e usa revisão para detectar concorrência. A sincronização local do timer é tentada novamente ao recuperar conexão ou foco. Ciclos com falha remota são mantidos em uma outbox local e sincronizados por upsert idempotente. A pausa de overfocus preserva o tempo acumulado. Relatórios de ciclos recentes, totais, avaliações e música agora derivam do mesmo repositório híbrido, combinando dados locais e remotos com filtro temporal pelo início da fase. O vínculo Spotify restaura primeiro as credenciais locais para sobreviver à indisponibilidade remota, evita polls concorrentes e limita tentativas repetidas de renovação após uma falha.
+
+Arquivos criados/alterados:
+- `BACKLOGGER.md` (avanço de BL-022)
+- `CERME.md` (regras de MEC-001 e MEC-026)
+- `STORY.md` (este registro)
+- `src/components/PomodoroTimer.tsx` (transições e retomada do timer)
+- `src/hooks/useSessionSync.ts` (timestamps, revisão, reconciliação e reenvio)
+- `src/lib/timerEngine.ts` (reconciliação de tempo extra pausado)
+- `src/hooks/useSpotify.tsx` (renovação com cooldown e proteção contra requests simultâneos)
+- `src/lib/database.ts` (outbox de ciclos e upsert idempotente)
+- `src/integrations/supabase/types.ts` (colunas revisionadas)
+- `supabase/migrations/20261009121000_active_session_revision.sql` (colunas compatíveis e backfill conservador)
+
+Funcionalidades afetadas:
+- MEC-001: relógio e persistência de estado da sessão.
+- MEC-019: métricas de relatórios calculadas pelo repositório híbrido e data de início consistente.
+- MEC-026: sincronização resiliente de ciclo entre localStorage e Supabase.
+
+Resultado:
+Implementação parcial. Ainda é necessário validar o build e os fluxos integrados. A migração precisa ser aplicada ao projeto Supabase antes do deploy desta revisão; o acesso remoto e as credenciais não estão disponíveis neste ambiente.
+
+Observações:
+- Não foi iniciada migração de banco de dados; a alteração proposta é aditiva no Supabase atual.
+- A sincronização das fases ainda precisa ser seguida pelo fechamento dos fluxos de Spotify, relatórios, Insights IA e email previstos em BL-022.
+- Build e validação visual não foram executados nesta etapa.
+
+Atualização desta mesma etapa:
+- A restauração Spotify e a consolidação de consultas de relatórios foram concluídas localmente conforme a descrição e os arquivos listados acima.
+- Permanecem dependentes do Supabase remoto a aplicação da migração, a conferência do backup/schema e a confirmação de SMTP e chave de IA.
+
+Validação complementar em 2026-10-09:
+- TypeScript (`tsc --noEmit`) passou.
+- ESLint nos arquivos alterados passou sem erros; há avisos de dependências de hooks já existentes no Spotify.
+- `git diff --check` passou.
+- O build do Vite não abriu: o binding nativo do SWC bloqueou a carga ao validar as permissões ACL do cache do Windows. Não alterei permissões do sistema para contornar essa proteção.

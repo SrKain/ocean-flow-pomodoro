@@ -60,6 +60,9 @@ Contagem decrescente em segundos, alteração de estado da sessão, gatilho de t
 - Uma sessão inicial de Imersão parada, ainda sem ciclos, também recebe a duração atual configurada. Sessões em andamento ou já iniciadas são preservadas.
 - Ciclo completado (`completed: true`) é registrado após conclusão de cada fase, sendo que um ciclo completo é contabilizado ao fechar a fase de respiração.
 - Não permite valores de minutos menores que 1 minuto nas configurações.
+- O relógio visível deriva de `end_at`; atualizações a cada segundo não são gravadas remotamente.
+- Transições incrementam `revision` e usam comparação de revisão no Supabase para reduzir sobrescritas entre abas/dispositivos.
+- O estado local permanece disponível offline e tenta sincronizar novamente quando a conexão retorna ou a janela recebe foco.
 
 ### Estados
 - Parado (`is_running: false`)
@@ -82,6 +85,7 @@ Rota principal `/`, componente `PomodoroTimer.tsx`.
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
 - Padrões atualizados para 5/30/10 minutos e migração conservadora de valores antigos (STORY-0005).
+- Relógio passou a ser reconstruído por timestamps e transições revisionadas; migração aditiva de schema registrada (STORY-0007).
 
 ---
 
@@ -678,7 +682,7 @@ Ativa
 Conectar a conta Spotify do usuário via fluxo seguro PKCE para rastrear as músicas ouvidas durante os blocos de foco.
 
 ### Comportamento
-O hook `useSpotify` implementa autenticação OAuth 2.0 com PKCE (Proof Key for Code Exchange) sem expor segredos de cliente. Gera code verifier e challenge via SubtleCrypto. Persiste os tokens em `spotify_connections` no Supabase e mantém uma cópia local por usuário para recuperação. Realiza polling periódico do endpoint `/v1/me/player/currently-playing` para obter faixa, artista, álbum e capa.
+O hook `useSpotify` implementa autenticação OAuth 2.0 com PKCE (Proof Key for Code Exchange) sem expor segredos de cliente. Gera code verifier e challenge via SubtleCrypto. Persiste os tokens em `spotify_connections` no Supabase e mantém uma cópia local por usuário para recuperação. Restaura primeiro a cópia local e complementa com o Supabase, de modo que indisponibilidade temporária remota não desconecte a integração. Realiza polling periódico do endpoint `/v1/me/player/currently-playing` para obter faixa, artista, álbum e capa.
 
 ### Entrada
 Ação de conexão com Spotify, autorização no consent do Spotify e retorno com `code`.
@@ -689,7 +693,8 @@ Tokens de acesso gravados e objeto `currentTrack` mantido no contexto da aplica�
 ### Regras
 - Escopos solicitados: `user-read-currently-playing`, `user-read-playback-state`.
 - Renovação automática de access token via refresh token antes do vencimento.
-- Renovações simultâneas compartilham a mesma solicitação; falhas temporárias mantêm os tokens salvos para nova tentativa.
+- Renovações simultâneas compartilham a mesma solicitação; falhas temporárias mantêm os tokens salvos e aplicam cooldown antes da próxima tentativa.
+- Chamadas de leitura da faixa atual não se sobrepõem quando uma resposta demora.
 - Ao desconectar explicitamente ou receber `invalid_grant`, as credenciais locais e remotas são removidas.
 - Permite desconectar a qualquer momento.
 
@@ -712,6 +717,8 @@ Botão de conexão no `NowPlaying.tsx` e `Settings.tsx`.
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
 - Persistência local de contingência e renovação resiliente de token adicionadas (STORY-0005).
+- Cooldown de refresh e proteção de polling concorrente adicionados (STORY-0007).
+- Restauração local da conexão antes da consulta remota adicionada para preservar sessão entre aberturas do app (STORY-0007).
 
 ---
 
@@ -1108,6 +1115,7 @@ O módulo `database.ts` atua como facade inteligente sobre `supabase/client.ts` 
 - Se o Supabase estiver configurado e o usuário for remoto, replica assincronamente para as tabelas correspondentes.
 - Se qualquer requisição remota falhar por timeout ou erro de rede, o retorno dos métodos analíticos recorre imediatamente aos dados do `localStorage`.
 - Ciclos locais e remotos são combinados por UUID nas consultas analíticas; registros locais que ainda não foram sincronizados permanecem disponíveis.
+- Ciclos com falha de sincronização entram em uma outbox local e são reenviados com `upsert` por UUID ao reconectar ou retornar à aplicação.
 
 ### Entrada
 Chamadas a `getSettingsAsync`, `saveSettingsAsync`, `saveCycleRecordAsync`, `updateCycleRatingAsync`, `getCyclesAsync`, etc.
@@ -1137,3 +1145,5 @@ Transparente a todas as telas da aplicação.
 ### Histórico
 - Registrado na implantação da governança (STORY-0001).
 - Consolidação dos registros locais e remotos por UUID (STORY-0006).
+- Consultas de ciclos recentes, totais, avaliações e música usam o mesmo repositório híbrido e filtram por início da fase (STORY-0007).
+- Reenvio idempotente de ciclos pendentes por outbox local (STORY-0007).

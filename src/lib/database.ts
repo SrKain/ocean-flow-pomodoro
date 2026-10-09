@@ -52,6 +52,71 @@ export interface MusicFocusStats {
   totalMinutes: number;
 }
 
+const PENDING_CYCLE_RECORDS_KEY = 'ocean_flow_pending_cycle_records';
+
+function getPendingCycleRecords(): CycleRecord[] {
+  try {
+    const value = localStorage.getItem(PENDING_CYCLE_RECORDS_KEY);
+    return value ? JSON.parse(value) as CycleRecord[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function setPendingCycleRecords(records: CycleRecord[]): void {
+  try {
+    localStorage.setItem(PENDING_CYCLE_RECORDS_KEY, JSON.stringify(records));
+  } catch (error) {
+    console.error('Could not persist pending cycle records:', error);
+  }
+}
+
+function cycleRecordToRow(record: CycleRecord) {
+  return {
+    id: record.id,
+    user_id: record.userId,
+    phase: record.phase,
+    start_time: record.startTime,
+    end_time: record.endTime,
+    tag: record.tag || null,
+    actions: record.actions || null,
+    completed: record.completed,
+    rating: record.rating ?? null,
+    spotify_track_name: record.spotifyTrackName || null,
+    spotify_artist: record.spotifyArtist || null,
+    spotify_album: record.spotifyAlbum || null,
+  };
+}
+
+export async function flushPendingCycleRecordsAsync(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  let userId: string | null;
+  try {
+    userId = await getCurrentUserId();
+  } catch (error) {
+    console.error('Could not identify the user for pending cycle synchronization:', error);
+    return;
+  }
+  if (!userId || userId.startsWith('local-') || userId === 'guest-user') return;
+
+  const retained: CycleRecord[] = [];
+  for (const record of getPendingCycleRecords()) {
+    if (record.userId !== userId) {
+      retained.push(record);
+      continue;
+    }
+    try {
+      const { error } = await supabase.from('cycle_records')
+        .upsert(cycleRecordToRow(record), { onConflict: 'id' });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Could not synchronize a pending cycle record:', error);
+      retained.push(record);
+    }
+  }
+  setPendingCycleRecords(retained);
+}
+
 const defaultSettings: PomodoroSettings = {
   immersionMinutes: 5,
   diveMinutes: 30,
@@ -180,31 +245,13 @@ export async function saveCycleRecordAsync(record: Omit<CycleRecord, 'id'>): Pro
     return id;
   }
 
+  setPendingCycleRecords([...getPendingCycleRecords().filter(item => item.id !== id), fullRecord]);
   try {
-    const { data, error } = await supabase
-      .from('cycle_records')
-      .insert({
-        id,
-        user_id: userId,
-        phase: record.phase,
-        start_time: record.startTime,
-        end_time: record.endTime,
-        tag: record.tag || null,
-        actions: record.actions || null,
-        completed: record.completed,
-        spotify_track_name: record.spotifyTrackName || null,
-        spotify_artist: record.spotifyArtist || null,
-        spotify_album: record.spotifyAlbum || null,
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      console.error('Error saving cycle to remote:', error);
-      return id;
-    }
-
-    return data?.id || id;
+    const { error } = await supabase.from('cycle_records')
+      .upsert(cycleRecordToRow(fullRecord), { onConflict: 'id' });
+    if (error) throw error;
+    setPendingCycleRecords(getPendingCycleRecords().filter(item => item.id !== id));
+    return id;
   } catch (e) {
     console.error('Error saving cycle to remote:', e);
     return id;
@@ -216,23 +263,34 @@ export async function updateCycleRatingAsync(cycleId: string, rating: number): P
   updateStorageRating(cycleId, rating);
   if (!isSupabaseConfigured) return true;
 
+  const localRecord = getCycles().find(record => record.id === cycleId);
+  if (localRecord) {
+    const ratedRecord = { ...localRecord, rating };
+    setPendingCycleRecords([...getPendingCycleRecords().filter(item => item.id !== cycleId), ratedRecord]);
+  }
+
   try {
-    await supabase
-      .from('cycle_records')
-      .update({ rating })
-      .eq('id', cycleId);
+    const { error } = localRecord
+      ? await supabase.from('cycle_records').upsert(
+        { ...cycleRecordToRow({ ...localRecord, rating }), rating },
+        { onConflict: 'id' },
+      )
+      : await supabase.from('cycle_records').update({ rating }).eq('id', cycleId);
+    if (error) throw error;
+    setPendingCycleRecords(getPendingCycleRecords().filter(item => item.id !== cycleId));
 
     return true;
   } catch (e) {
     console.error('Error updating cycle rating in remote:', e);
-    return true;
+    return false;
   }
 }
 
 export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<CycleRecord[]> {
   const getFilteredLocalCycles = (userId?: string | null): CycleRecord[] => {
+    if (userId === null) return [];
     let cycles = getCycles();
-    if (userId) cycles = cycles.filter(cycle => cycle.userId === userId);
+    if (userId !== undefined) cycles = cycles.filter(cycle => cycle.userId === userId);
     if (startDate) {
       cycles = cycles.filter(c => new Date(c.startTime).getTime() >= startDate.getTime());
     }
@@ -243,11 +301,13 @@ export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<
   };
 
   if (!isSupabaseConfigured) {
-    return getFilteredLocalCycles();
+    const userId = await getCurrentUserId();
+    return getFilteredLocalCycles(userId);
   }
 
+  let userId: string | null = null;
   try {
-    const userId = await getCurrentUserId();
+    userId = await getCurrentUserId();
     if (!userId || userId.startsWith('local-')) return getFilteredLocalCycles(userId);
 
     let query = supabase
@@ -287,9 +347,15 @@ export async function getCyclesAsync(startDate?: Date, endDate?: Date): Promise<
     const merged = new Map<string, CycleRecord>();
     for (const cycle of getFilteredLocalCycles(userId)) merged.set(cycle.id, cycle);
     for (const cycle of remoteCycles) merged.set(cycle.id, cycle);
+    const pendingIds = new Set(getPendingCycleRecords()
+      .filter(cycle => cycle.userId === userId)
+      .map(cycle => cycle.id));
+    for (const cycle of getFilteredLocalCycles(userId)) {
+      if (pendingIds.has(cycle.id)) merged.set(cycle.id, cycle);
+    }
     return Array.from(merged.values()).sort((a, b) => a.startTime.localeCompare(b.startTime));
   } catch (e) {
-    return getFilteredLocalCycles();
+    return getFilteredLocalCycles(userId);
   }
 }
 
@@ -358,99 +424,15 @@ export async function getTagStatsAsync(startDate?: Date, endDate?: Date): Promis
 }
 
 export async function getRecentCyclesAsync(limit: number = 20, startDate?: Date, endDate?: Date): Promise<CycleRecord[]> {
-  try {
-    const userId = await getCurrentUserId();
-    if (!isSupabaseConfigured || !userId || userId.startsWith('local-')) {
-      return (await getCyclesAsync(startDate, endDate)).slice(-limit).reverse();
-    }
-
-    let query = supabase
-      .from('cycle_records')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (startDate) {
-      query = query.gte('start_time', startDate.toISOString());
-    }
-    if (endDate) {
-      query = query.lte('start_time', endDate.toISOString());
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching recent cycles:', error);
-      return (await getCyclesAsync(startDate, endDate)).slice(-limit).reverse();
-    }
-
-    const remoteCycles = (data || []).map(row => ({
-      id: row.id,
-      phase: row.phase as Phase,
-      startTime: row.start_time,
-      endTime: row.end_time,
-      tag: row.tag || undefined,
-      actions: row.actions || undefined,
-      completed: row.completed,
-      userId: row.user_id || undefined,
-      rating: row.rating || undefined,
-      spotifyTrackName: row.spotify_track_name || undefined,
-      spotifyArtist: row.spotify_artist || undefined,
-      spotifyAlbum: row.spotify_album || undefined,
-    }));
-    const localCycles = (await getCyclesAsync(startDate, endDate)).filter(cycle => cycle.userId === userId);
-    const merged = new Map<string, CycleRecord>();
-    for (const cycle of localCycles) merged.set(cycle.id, cycle);
-    for (const cycle of remoteCycles) merged.set(cycle.id, cycle);
-    return Array.from(merged.values()).sort((a, b) => b.startTime.localeCompare(a.startTime)).slice(0, limit);
-  } catch (e) {
-    console.error('Error reading recent cycles:', e);
-    return [];
-  }
+  if (limit <= 0) return [];
+  const cycles = await getCyclesAsync(startDate, endDate);
+  return cycles.slice(-limit).reverse();
 }
-
 // Get total completed cycles - counts breath phases (full cycle completion)
 export async function getTotalCompletedCyclesAsync(startDate?: Date, endDate?: Date): Promise<number> {
-  const getLocalCount = async () => {
-    const cycles = await getCyclesAsync(startDate, endDate);
-    return cycles.filter(c => c.phase === 'breath' && c.completed).length;
-  };
-
-  if (!isSupabaseConfigured) {
-    return getLocalCount();
-  }
-
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId || userId.startsWith('local-')) return getLocalCount();
-
-    let query = supabase
-      .from('cycle_records')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('phase', 'breath')
-      .eq('completed', true);
-
-    if (startDate) {
-      query = query.gte('created_at', startDate.toISOString());
-    }
-    if (endDate) {
-      query = query.lte('created_at', endDate.toISOString());
-    }
-
-    const { count, error } = await query;
-
-    if (error || count === null || count === 0) {
-      return getLocalCount();
-    }
-
-    return count;
-  } catch (e) {
-    return getLocalCount();
-  }
+  const cycles = await getCyclesAsync(startDate, endDate);
+  return cycles.filter(cycle => cycle.phase === 'breath' && cycle.completed).length;
 }
-
 // Get total focus time (dive phase only)
 export async function getTotalFocusMinutesAsync(startDate?: Date, endDate?: Date): Promise<number> {
   try {
@@ -525,373 +507,85 @@ export function generateId(): string {
 
 // Get rating statistics
 export async function getRatingStatsAsync(startDate?: Date, endDate?: Date): Promise<RatingStats> {
-  const getLocalRatingStats = async () => {
-    const cycles = await getCyclesAsync(startDate, endDate);
-    const ratings = cycles.filter(c => c.phase === 'breath' && c.completed && c.rating != null).map(c => c.rating as number);
-    const totalRated = ratings.length;
-    if (totalRated === 0) return { averageRating: 0, totalRated: 0, distribution: [] };
-    const averageRating = ratings.reduce((a, b) => a + b, 0) / totalRated;
-    const distribution = [1, 2, 3, 4, 5].map(rating => ({
+  const cycles = await getCyclesAsync(startDate, endDate);
+  const ratings = cycles
+    .filter(cycle => cycle.phase === 'breath' && cycle.completed && cycle.rating != null)
+    .map(cycle => cycle.rating as number);
+  const totalRated = ratings.length;
+  return {
+    averageRating: totalRated ? ratings.reduce((sum, rating) => sum + rating, 0) / totalRated : 0,
+    totalRated,
+    distribution: [1, 2, 3, 4, 5].map(rating => ({
       rating,
-      count: ratings.filter(r => r === rating).length,
-    }));
-    return { averageRating, totalRated, distribution };
+      count: ratings.filter(value => value === rating).length,
+    })),
   };
-
-  if (!isSupabaseConfigured) {
-    return getLocalRatingStats();
-  }
-
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId || userId.startsWith('local-')) return getLocalRatingStats();
-
-    let query = supabase
-      .from('cycle_records')
-      .select('rating')
-      .eq('user_id', userId)
-      .eq('phase', 'breath')
-      .eq('completed', true)
-      .not('rating', 'is', null);
-
-    if (startDate) {
-      query = query.gte('created_at', startDate.toISOString());
-    }
-    if (endDate) {
-      query = query.lte('created_at', endDate.toISOString());
-    }
-
-    const { data, error } = await query;
-
-    if (error || !data || data.length === 0) {
-      return getLocalRatingStats();
-    }
-
-    const ratings = data.map(d => d.rating as number);
-    const totalRated = ratings.length;
-    
-    if (totalRated === 0) {
-      return getLocalRatingStats();
-    }
-
-    const averageRating = ratings.reduce((a, b) => a + b, 0) / totalRated;
-    
-    const distribution = [1, 2, 3, 4, 5].map(rating => ({
-      rating,
-      count: ratings.filter(r => r === rating).length,
-    }));
-
-    return { averageRating, totalRated, distribution };
-  } catch (e) {
-    return getLocalRatingStats();
-  }
 }
-
 // Get daily rating averages
 export async function getDailyRatingStatsAsync(startDate: Date, endDate: Date): Promise<{ date: string; avgRating: number; count: number }[]> {
-  const getLocalDailyRatings = async () => {
-    const cycles = await getCyclesAsync(startDate, endDate);
-    const breathCycles = cycles.filter(c => c.phase === 'breath' && c.completed && c.rating != null);
-    const dailyMap = new Map<string, { sum: number; count: number }>();
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
-      dailyMap.set(dateStr, { sum: 0, count: 0 });
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    for (const c of breathCycles) {
-      const dateStr = new Date(c.startTime).toISOString().split('T')[0];
-      const existing = dailyMap.get(dateStr) || { sum: 0, count: 0 };
-      dailyMap.set(dateStr, {
-        sum: existing.sum + (c.rating as number),
-        count: existing.count + 1
-      });
-    }
-    return Array.from(dailyMap.entries())
-      .map(([date, stats]) => ({
-        date,
-        avgRating: stats.count > 0 ? stats.sum / stats.count : 0,
-        count: stats.count
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  };
-
-  if (!isSupabaseConfigured) {
-    return getLocalDailyRatings();
+  const cycles = await getCyclesAsync(startDate, endDate);
+  const daily = new Map<string, { sum: number; count: number }>();
+  const day = new Date(startDate);
+  while (day <= endDate) {
+    daily.set(day.toISOString().slice(0, 10), { sum: 0, count: 0 });
+    day.setDate(day.getDate() + 1);
   }
-
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId || userId.startsWith('local-')) return getLocalDailyRatings();
-
-    const { data, error } = await supabase
-      .from('cycle_records')
-      .select('created_at, rating')
-      .eq('user_id', userId)
-      .eq('phase', 'breath')
-      .eq('completed', true)
-      .not('rating', 'is', null)
-      .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString());
-
-    if (error || !data || data.length === 0) {
-      return getLocalDailyRatings();
-    }
-
-    const dailyMap = new Map<string, { sum: number; count: number }>();
-    
-    // Initialize all days
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
-      dailyMap.set(dateStr, { sum: 0, count: 0 });
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    for (const row of data || []) {
-      const dateStr = new Date(row.created_at).toISOString().split('T')[0];
-      const existing = dailyMap.get(dateStr) || { sum: 0, count: 0 };
-      dailyMap.set(dateStr, { 
-        sum: existing.sum + (row.rating as number), 
-        count: existing.count + 1 
-      });
-    }
-
-    return Array.from(dailyMap.entries())
-      .map(([date, stats]) => ({ 
-        date, 
-        avgRating: stats.count > 0 ? stats.sum / stats.count : 0,
-        count: stats.count
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  } catch (e) {
-    return getLocalDailyRatings();
+  for (const cycle of cycles) {
+    if (cycle.phase !== 'breath' || !cycle.completed || cycle.rating == null) continue;
+    const date = new Date(cycle.startTime).toISOString().slice(0, 10);
+    const stats = daily.get(date) || { sum: 0, count: 0 };
+    daily.set(date, { sum: stats.sum + cycle.rating, count: stats.count + 1 });
   }
+  return Array.from(daily.entries()).map(([date, stats]) => ({
+    date,
+    avgRating: stats.count ? stats.sum / stats.count : 0,
+    count: stats.count,
+  })).sort((a, b) => a.date.localeCompare(b.date));
 }
-
 // Get music × focus correlation stats
 export async function getMusicFocusStatsAsync(startDate?: Date, endDate?: Date): Promise<MusicFocusStats[]> {
-  const getLocalMusicStats = async () => {
-    const cycles = await getCyclesAsync(startDate, endDate);
-    const diveCycles = cycles.filter(c => c.phase === 'dive' && c.completed);
-    const artistMap = new Map<string, { 
-      cycleCount: number; 
-      ratingSum: number; 
-      ratingCount: number; 
-      totalMinutes: number;
-    }>();
-
-    for (const c of diveCycles) {
-      const artist = c.spotifyArtist || 'Sem música';
-      if (!artistMap.has(artist)) {
-        artistMap.set(artist, { 
-          cycleCount: 0, 
-          ratingSum: 0, 
-          ratingCount: 0, 
-          totalMinutes: 0,
-        });
-      }
-      const stats = artistMap.get(artist)!;
-      stats.cycleCount += 1;
-      if (c.rating) {
-        stats.ratingSum += c.rating;
-        stats.ratingCount += 1;
-      }
-      const startTime = new Date(c.startTime).getTime();
-      const endTime = new Date(c.endTime).getTime();
-      stats.totalMinutes += Math.round((endTime - startTime) / 60000);
+  const cycles = await getCyclesAsync(startDate, endDate);
+  const artists = new Map<string, { count: number; ratingSum: number; ratingCount: number; minutes: number }>();
+  for (const cycle of cycles) {
+    if (cycle.phase !== 'dive' || !cycle.completed) continue;
+    const artist = cycle.spotifyArtist || 'Sem música';
+    const stats = artists.get(artist) || { count: 0, ratingSum: 0, ratingCount: 0, minutes: 0 };
+    stats.count += 1;
+    if (cycle.rating != null) {
+      stats.ratingSum += cycle.rating;
+      stats.ratingCount += 1;
     }
-
-    return Array.from(artistMap.entries())
-      .map(([artist, stats]) => ({
-        artist,
-        cycleCount: stats.cycleCount,
-        averageRating: stats.ratingCount > 0 ? stats.ratingSum / stats.ratingCount : 0,
-        totalMinutes: stats.totalMinutes,
-      }))
-      .sort((a, b) => b.totalMinutes - a.totalMinutes);
-  };
-
-  if (!isSupabaseConfigured) {
-    return getLocalMusicStats();
+    const duration = (Date.parse(cycle.endTime) - Date.parse(cycle.startTime)) / 60000;
+    if (Number.isFinite(duration) && duration > 0) stats.minutes += Math.round(duration);
+    artists.set(artist, stats);
   }
-
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId || userId.startsWith('local-')) return getLocalMusicStats();
-
-    let query = supabase
-      .from('cycle_records')
-      .select('spotify_artist, spotify_track_name, rating, start_time, end_time')
-      .eq('user_id', userId)
-      .eq('phase', 'dive')
-      .eq('completed', true);
-
-    if (startDate) {
-      query = query.gte('created_at', startDate.toISOString());
-    }
-    if (endDate) {
-      query = query.lte('created_at', endDate.toISOString());
-    }
-
-    const { data, error } = await query;
-
-    if (error || !data || data.length === 0) {
-      return getLocalMusicStats();
-    }
-
-    const artistMap = new Map<string, { 
-      cycleCount: number; 
-      ratingSum: number; 
-      ratingCount: number; 
-      totalMinutes: number;
-      tracks: Set<string>;
-    }>();
-
-    for (const row of data) {
-      const artist = row.spotify_artist || 'Sem música';
-      const trackName = row.spotify_track_name || undefined;
-      
-      if (!artistMap.has(artist)) {
-        artistMap.set(artist, { 
-          cycleCount: 0, 
-          ratingSum: 0, 
-          ratingCount: 0, 
-          totalMinutes: 0,
-          tracks: new Set()
-        });
-      }
-      
-      const stats = artistMap.get(artist)!;
-      stats.cycleCount += 1;
-      
-      if (row.rating) {
-        stats.ratingSum += row.rating;
-        stats.ratingCount += 1;
-      }
-      
-      const startTime = new Date(row.start_time).getTime();
-      const endTime = new Date(row.end_time).getTime();
-      stats.totalMinutes += Math.round((endTime - startTime) / 60000);
-      
-      if (trackName) {
-        stats.tracks.add(trackName);
-      }
-    }
-
-    return Array.from(artistMap.entries())
-      .map(([artist, stats]) => ({
-        artist,
-        cycleCount: stats.cycleCount,
-        averageRating: stats.ratingCount > 0 ? stats.ratingSum / stats.ratingCount : 0,
-        totalMinutes: stats.totalMinutes,
-      }))
-      .sort((a, b) => b.totalMinutes - a.totalMinutes);
-  } catch (e) {
-    return getLocalMusicStats();
-  }
+  return Array.from(artists.entries()).map(([artist, stats]) => ({
+    artist,
+    cycleCount: stats.count,
+    averageRating: stats.ratingCount ? stats.ratingSum / stats.ratingCount : 0,
+    totalMinutes: stats.minutes,
+  })).sort((a, b) => b.totalMinutes - a.totalMinutes);
 }
-
 // Get top tracks by rating
 export async function getTopTracksByRatingAsync(startDate?: Date, endDate?: Date): Promise<{ track: string; artist: string; avgRating: number; cycleCount: number }[]> {
-  const getLocalTopTracks = async () => {
-    const cycles = await getCyclesAsync(startDate, endDate);
-    const ratedTracks = cycles.filter(c => c.phase === 'breath' && c.completed && c.rating != null && c.spotifyTrackName != null);
-    const trackMap = new Map<string, { artist: string; ratingSum: number; count: number }>();
-
-    for (const c of ratedTracks) {
-      const key = `${c.spotifyTrackName}|${c.spotifyArtist || 'Desconhecido'}`;
-      if (!trackMap.has(key)) {
-        trackMap.set(key, { 
-          artist: c.spotifyArtist || 'Desconhecido', 
-          ratingSum: 0, 
-          count: 0 
-        });
-      }
-      const stats = trackMap.get(key)!;
-      stats.ratingSum += c.rating as number;
-      stats.count += 1;
-    }
-
-    return Array.from(trackMap.entries())
-      .map(([key, stats]) => {
-        const [track] = key.split('|');
-        return {
-          track,
-          artist: stats.artist,
-          avgRating: stats.ratingSum / stats.count,
-          cycleCount: stats.count,
-        };
-      })
-      .sort((a, b) => b.avgRating - a.avgRating)
-      .slice(0, 10);
-  };
-
-  if (!isSupabaseConfigured) {
-    return getLocalTopTracks();
+  const cycles = await getCyclesAsync(startDate, endDate);
+  const tracks = new Map<string, { track: string; artist: string; sum: number; count: number }>();
+  for (const cycle of cycles) {
+    if (cycle.phase !== 'breath' || !cycle.completed || cycle.rating == null || !cycle.spotifyTrackName) continue;
+    const artist = cycle.spotifyArtist || 'Desconhecido';
+    const key = JSON.stringify([cycle.spotifyTrackName, artist]);
+    const stats = tracks.get(key) || { track: cycle.spotifyTrackName, artist, sum: 0, count: 0 };
+    stats.sum += cycle.rating;
+    stats.count += 1;
+    tracks.set(key, stats);
   }
-
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId || userId.startsWith('local-')) return getLocalTopTracks();
-
-    let query = supabase
-      .from('cycle_records')
-      .select('spotify_artist, spotify_track_name, rating')
-      .eq('user_id', userId)
-      .eq('phase', 'breath')
-      .eq('completed', true)
-      .not('rating', 'is', null)
-      .not('spotify_track_name', 'is', null);
-
-    if (startDate) {
-      query = query.gte('created_at', startDate.toISOString());
-    }
-    if (endDate) {
-      query = query.lte('created_at', endDate.toISOString());
-    }
-
-    const { data, error } = await query;
-
-    if (error || !data || data.length === 0) {
-      return getLocalTopTracks();
-    }
-
-    const trackMap = new Map<string, { artist: string; ratingSum: number; count: number }>();
-
-    for (const row of data) {
-      const key = `${row.spotify_track_name}|${row.spotify_artist}`;
-      
-      if (!trackMap.has(key)) {
-        trackMap.set(key, { 
-          artist: row.spotify_artist || 'Desconhecido', 
-          ratingSum: 0, 
-          count: 0 
-        });
-      }
-      
-      const stats = trackMap.get(key)!;
-      stats.ratingSum += row.rating as number;
-      stats.count += 1;
-    }
-
-    return Array.from(trackMap.entries())
-      .map(([key, stats]) => {
-        const [track] = key.split('|');
-        return {
-          track,
-          artist: stats.artist,
-          avgRating: stats.ratingSum / stats.count,
-          cycleCount: stats.count,
-        };
-      })
-      .sort((a, b) => b.avgRating - a.avgRating)
-      .slice(0, 10);
-  } catch (e) {
-    return getLocalTopTracks();
-  }
+  return Array.from(tracks.values()).map(stats => ({
+    track: stats.track,
+    artist: stats.artist,
+    avgRating: stats.sum / stats.count,
+    cycleCount: stats.count,
+  })).sort((a, b) => b.avgRating - a.avgRating).slice(0, 10);
 }
-
 // Breath tag stats interface
 export interface BreathTagStats {
   tag: string;
