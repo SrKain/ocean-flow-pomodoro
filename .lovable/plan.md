@@ -2,16 +2,30 @@
 
 ## Estado atual confirmado
 
-- A Home já usa um relógio baseado em timestamps e recalcula o tempo localmente, mas a implementação está concentrada em um componente muito grande e a sincronização ainda não compila.
-- As migrações locais de timestamps do timer e avanço automático existem, porém essas colunas ainda não estão no banco ativo. Os tipos gerados também não as conhecem, causando os erros atuais.
+- A Home já usa um relógio baseado em timestamps e recalcula o tempo localmente, mas a implementação está concentrada em um componente muito grande.
+- A consulta atual confirmou que o banco já possui os timestamps do timer, `timer_status`, `revision` e `auto_advance`; não será necessário recriar essas colunas. O erro atual de TypeScript é a referência a `NodeJS.Timeout` no código do navegador.
 - A edição rápida de duração, confirmação de pulo, reset, contagem 3–2–1 e modo overfocus já têm uma base reaproveitável.
 - O fundo escuro dinâmico, o anel polar, o layout paisagem e os dois modos de PIP existem, mas repetem regras visuais e usam muitos valores fora do design system.
 - O Spotify hoje lê apenas a faixa atual. Não há escopos nem comandos para play/pause, anterior, próxima, dispositivo ou fila.
 - Dashboard, resumo diário e configurações funcionam como telas separadas, mas ainda têm hierarquia fragmentada e não cobrem toda a revisão pedida.
 
+## Prioridade antes de continuar — adequar o banco ao aplicativo atual
+
+Esta etapa vem antes do redesign e fica limitada ao que o aplicativo já oferece, sem criar estruturas para funcionalidades futuras.
+
+- Conferir os campos lidos e gravados por timer/sincronização, configurações, ciclos, tags/grupos, missões, avaliações, Spotify e resumos por email contra o banco ativo.
+- Preservar as tabelas existentes: `active_sessions`, `pomodoro_settings`, `cycle_records`, `cycle_tags`, `tags`, `tag_groups`, `tasks`, `daily_ratings`, `spotify_connections` e `profiles`.
+- Verificar dados reais, duplicidades, vínculos entre ciclos e tags, valores inválidos e registros sem proprietário antes de propor correções; não deduzir problemas apenas da estrutura.
+- A consulta atual confirmou RLS habilitada nas tabelas e acesso de leitura/gravação para usuários autenticados. Revisar também as políticas e o isolamento entre contas, sem ampliar acesso público.
+- Revisar índices e unicidade necessários aos fluxos atuais. Já existem unicidade de sessão por usuário, conexão Spotify por usuário, avaliação por usuário/dia e vínculo ciclo/tag; verificar duplicidades em configurações antes de acrescentar uma restrição.
+- Aplicar somente migrações realmente necessárias, preservando dados e sem reaplicar migrações de colunas que já existem.
+- Atualizar os tipos gerados pelo fluxo gerenciado e corrigir apenas os pontos de leitura/gravação incompatíveis, incluindo o erro de temporizador do navegador.
+- Validar com uma conta autenticada: salvar/recuperar configurações e timer, registrar ciclo, tags, missão e avaliação, e confirmar os dados nos relatórios. Spotify e email serão verificados sem expor credenciais nem disparar mensagens em massa.
+- Entregar um resumo do que foi alterado no banco e do que não exigiu alteração; então retomar as fases abaixo.
+
 ## Fase 1 — relógio confiável e estados
 
-- Aplicar de forma compatível as colunas pendentes do timer e `auto_advance`, preservando os registros atuais, políticas e permissões existentes.
+- Reutilizar as colunas de timestamps e `auto_advance` já presentes, preservando os registros atuais, políticas e permissões existentes.
 - Atualizar os tipos do banco pelo fluxo gerenciado e eliminar os erros atuais de TypeScript.
 - Extrair do componente principal um controlador de timer com estados explícitos: `idle`, `running`, `paused`, `transition`, `overtime` e `completed`.
 - Manter ticks visuais somente no navegador e persistir apenas início, pausa, retomada, duração, fase, conclusão, pulo e overfocus.

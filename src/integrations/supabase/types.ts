@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -18,10 +18,15 @@ export type Database = {
         Row: {
           current_phase: string
           cycle_count: number
+          end_at: string | null
           extra_time_seconds: number | null
           id: string
           is_overtime: boolean
           is_running: boolean
+          overtime_started_at: string | null
+          paused_at: string | null
+          remaining_when_paused: number | null
+          revision: number
           started_at: string | null
           end_at: string | null
           paused_at: string | null
@@ -30,6 +35,7 @@ export type Database = {
           timer_status: "idle" | "running" | "paused" | "transition" | "overtime" | "completed"
           revision: number
           time_left: number
+          timer_status: string
           total_time: number
           updated_at: string
           user_id: string
@@ -37,10 +43,15 @@ export type Database = {
         Insert: {
           current_phase?: string
           cycle_count?: number
+          end_at?: string | null
           extra_time_seconds?: number | null
           id?: string
           is_overtime?: boolean
           is_running?: boolean
+          overtime_started_at?: string | null
+          paused_at?: string | null
+          remaining_when_paused?: number | null
+          revision?: number
           started_at?: string | null
           end_at?: string | null
           paused_at?: string | null
@@ -49,6 +60,7 @@ export type Database = {
           timer_status?: "idle" | "running" | "paused" | "transition" | "overtime" | "completed"
           revision?: number
           time_left?: number
+          timer_status?: string
           total_time?: number
           updated_at?: string
           user_id: string
@@ -56,10 +68,15 @@ export type Database = {
         Update: {
           current_phase?: string
           cycle_count?: number
+          end_at?: string | null
           extra_time_seconds?: number | null
           id?: string
           is_overtime?: boolean
           is_running?: boolean
+          overtime_started_at?: string | null
+          paused_at?: string | null
+          remaining_when_paused?: number | null
+          revision?: number
           started_at?: string | null
           end_at?: string | null
           paused_at?: string | null
@@ -68,6 +85,7 @@ export type Database = {
           timer_status?: "idle" | "running" | "paused" | "transition" | "overtime" | "completed"
           revision?: number
           time_left?: number
+          timer_status?: string
           total_time?: number
           updated_at?: string
           user_id?: string
@@ -184,6 +202,7 @@ export type Database = {
       }
       pomodoro_settings: {
         Row: {
+          auto_advance: boolean
           breath_minutes: number
           created_at: string
           dive_minutes: number
@@ -194,6 +213,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          auto_advance?: boolean
           breath_minutes?: number
           created_at?: string
           dive_minutes?: number
@@ -204,6 +224,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          auto_advance?: boolean
           breath_minutes?: number
           created_at?: string
           dive_minutes?: number
