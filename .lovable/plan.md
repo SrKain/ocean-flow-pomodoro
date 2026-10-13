@@ -2,10 +2,12 @@
 
 ## Estado atual confirmado
 
+- Referência atualizada: commit `9611dec8febe5e39d0dd75b2a77c16e3512af25c` (“melhoria no fluxo”, de 9 de outubro de 2026). O código funcional do projeto atual corresponde a esse commit; as diferenças posteriores estão em configuração de ambiente, tipos gerados do banco e neste plano. Não haverá rollback nem substituição do trabalho existente.
 - A Home já usa um relógio baseado em timestamps e recalcula o tempo localmente, mas a implementação está concentrada em um componente muito grande.
-- A consulta atual confirmou que o banco já possui os timestamps do timer, `timer_status`, `revision` e `auto_advance`; não será necessário recriar essas colunas. O erro atual de TypeScript é a referência a `NodeJS.Timeout` no código do navegador.
+- A consulta do banco confirmou os timestamps do timer, `timer_status`, `revision` e `auto_advance`; não será necessário recriar essas colunas. O diagnóstico anterior de `NodeJS.Timeout` não corresponde ao hook atual e será revalidado antes de qualquer correção.
+- O commit já inclui sincronização com controle de revisão, reconciliação do relógio persistido, fila de registros de ciclos pendentes e regras visuais em `phaseTokens`. Essas melhorias serão preservadas e testadas, não reimplementadas a partir da leitura antiga.
 - A edição rápida de duração, confirmação de pulo, reset, contagem 3–2–1 e modo overfocus já têm uma base reaproveitável.
-- O fundo escuro dinâmico, o anel polar, o layout paisagem e os dois modos de PIP existem, mas repetem regras visuais e usam muitos valores fora do design system.
+- O fundo escuro dinâmico, o anel polar, o layout paisagem e os dois modos de PIP existem; a revisão visual partirá da centralização de cores já presente em `phaseTokens`.
 - O Spotify hoje lê apenas a faixa atual. Não há escopos nem comandos para play/pause, anterior, próxima, dispositivo ou fila.
 - Dashboard, resumo diário e configurações funcionam como telas separadas, mas ainda têm hierarquia fragmentada e não cobrem toda a revisão pedida.
 
@@ -13,13 +15,13 @@
 
 Esta etapa vem antes do redesign e fica limitada ao que o aplicativo já oferece, sem criar estruturas para funcionalidades futuras.
 
-- Conferir os campos lidos e gravados por timer/sincronização, configurações, ciclos, tags/grupos, missões, avaliações, Spotify e resumos por email contra o banco ativo.
+- Conferir os campos lidos e gravados no commit de referência por timer/sincronização, configurações, ciclos, tags/grupos, missões, avaliações, Spotify e resumos por email contra o banco ativo; incluir o fluxo compartilhado de missões em `src/lib/tasks.ts`.
 - Preservar as tabelas existentes: `active_sessions`, `pomodoro_settings`, `cycle_records`, `cycle_tags`, `tags`, `tag_groups`, `tasks`, `daily_ratings`, `spotify_connections` e `profiles`.
 - Verificar dados reais, duplicidades, vínculos entre ciclos e tags, valores inválidos e registros sem proprietário antes de propor correções; não deduzir problemas apenas da estrutura.
 - A consulta atual confirmou RLS habilitada nas tabelas e acesso de leitura/gravação para usuários autenticados. Revisar também as políticas e o isolamento entre contas, sem ampliar acesso público.
 - Revisar índices e unicidade necessários aos fluxos atuais. Já existem unicidade de sessão por usuário, conexão Spotify por usuário, avaliação por usuário/dia e vínculo ciclo/tag; verificar duplicidades em configurações antes de acrescentar uma restrição.
 - Aplicar somente migrações realmente necessárias, preservando dados e sem reaplicar migrações de colunas que já existem.
-- Atualizar os tipos gerados pelo fluxo gerenciado e corrigir apenas os pontos de leitura/gravação incompatíveis, incluindo o erro de temporizador do navegador.
+- Conferir os tipos gerados pelo fluxo gerenciado e corrigir apenas incompatibilidades comprovadas por uma nova validação, sem usar os erros anteriores como diagnóstico do código atualizado.
 - Validar com uma conta autenticada: salvar/recuperar configurações e timer, registrar ciclo, tags, missão e avaliação, e confirmar os dados nos relatórios. Spotify e email serão verificados sem expor credenciais nem disparar mensagens em massa.
 - Entregar um resumo do que foi alterado no banco e do que não exigiu alteração; então retomar as fases abaixo.
 
@@ -42,7 +44,7 @@ Esta etapa vem antes do redesign e fica limitada ao que o aplicativo já oferece
 - Durante a execução, esconder tags, missões e ações secundárias; manter apenas timer, fase, progresso, pausa e Spotify compacto.
 - No estado parado ou pausado, revelar edição de duração, tags/contexto e ações adicionais sem competir com o relógio.
 - No modo paisagem, manter timer à esquerda e contexto à direita; criar composições próprias para tablet e desktop, sem apenas ampliar o mobile.
-- Centralizar a interpolação escura das fases e reutilizá-la na Home e no PIP.
+- Reutilizar a interpolação escura já centralizada em `phaseTokens` e conferir sua aplicação consistente na Home e no PIP.
 - Refinar o PolarRing com tamanho responsivo, progresso suave, glow circular sem quinas e estados visuais de pausa, conclusão e overfocus.
 - Consolidar tokens semânticos de superfície, glass, glow e fase; substituir cores e estilos inline onde o tema já oferece uma função equivalente.
 - Respeitar contraste, áreas de toque, teclado e redução de movimento.
